@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill -f \"node server.js\")",
+      "Bash(curl -s http://localhost:5001/api/health)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(npm run dev -- --host)",
+      "Bash(curl -s -X POST http://localhost:5001/api/auth/login -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"test@test.com\"\",\"\"password\"\":\"\"test123\"\"}')",
+      "Bash(curl -s -X POST http://localhost:5001/api/auth/register -H \"Content-Type: application/json\" -d '{\"\"name\"\":\"\"Test User\"\",\"\"email\"\":\"\"agent@test.com\"\",\"\"password\"\":\"\"test12345\"\"}')",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWEwOTJiYzcwZjM2OTc5MjFlMGQwNTIiLCJpYXQiOjE3NzIxMzEwMDQsImV4cCI6MTc3NDcyMzAwNH0.w_NeljkerA5Drofcq_kuul49AUCUYHGRRxjL54yVcds\")",
+      "Bash(curl -s -X POST http://localhost:5001/api/orchestrator/message -H \"Content-Type: application/json\" -H \"Authorization: Bearer $TOKEN\" -d '{\"\"message\"\":\"\"Find software engineer jobs in Lahore\"\",\"\"sessionId\"\":\"\"test_session_1\"\"}')",
+      "Bash(curl -s http://localhost:5001/api/)",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5001/api/pipeline/cv-status)",
+      "Bash(netstat -ano)",
+      "Bash(ss -tlnp)"
+    ]
+  }
+}
