@@ -50,29 +50,23 @@ class JobSearchAgent {
   }
 
   /**
-   * Search for jobs using multiple sources
+   * Search for jobs using SerpAPI Google Jobs (single direct call, no site: filters)
    */
   async searchJobs(userId, params, trace) {
     const { keywords, location, filters = {} } = params;
 
     await this.updateAgentStatus(userId, 'working', `Searching: ${keywords}`);
 
-    // Scrape jobs from multiple sources
-    const allJobs = [];
-    const sources = filters.sources || this.sources;
-
-    for (const source of sources) {
-      logAgentActivity('jobSearch', `scraping_${source}`, { keywords, location });
-      
-      try {
-        const jobs = await this.scrapeFromSource(source, keywords, location, filters);
-        allJobs.push(...jobs);
-      } catch (error) {
-        logAgentActivity('jobSearch', `scraping_failed_${source}`, { error: error.message });
-      }
+    // Single SerpAPI call — no source loop, no site: filters that break google_jobs engine
+    let allJobs = [];
+    try {
+      allJobs = await this.scrapeWithSerpAPI(keywords, location, filters);
+    } catch (error) {
+      logAgentActivity('jobSearch', 'scraping_failed', { error: error.message });
+      throw error;
     }
 
-    // Run deduplication
+    // Deduplication
     const { uniqueJobs, duplicates } = await this.deduplicate(allJobs);
 
     // Save to database
@@ -82,10 +76,10 @@ class JobSearchAgent {
     const candidateProfile = await this.getCandidateProfile(userId);
     const matchedJobs = await this.calculateMatchScores(savedJobs, candidateProfile);
 
-    logAgentActivity('jobSearch', 'search_completed', { 
-      totalFound: allJobs.length, 
+    logAgentActivity('jobSearch', 'search_completed', {
+      totalFound: allJobs.length,
       uniqueCount: uniqueJobs.length,
-      savedCount: savedJobs.length 
+      savedCount: savedJobs.length,
     });
 
     await this.updateAgentStatus(userId, 'completed', `Found ${matchedJobs.length} jobs`);
@@ -97,96 +91,111 @@ class JobSearchAgent {
         duplicatesFound: duplicates.length,
         uniqueCount: uniqueJobs.length,
         savedCount: savedJobs.length,
-        sources,
       },
     };
   }
 
   /**
-   * Scrape jobs from a specific source
-   */
-  async scrapeFromSource(source, keywords, location, filters) {
-    // Use Apify for job scraping if API key is available
-    if (process.env.APIFY_API_TOKEN) {
-      return await this.scrapeWithApify(source, keywords, location, filters);
-    }
-
-    // Use SerpAPI (Google Jobs) as fallback
-    if (process.env.SERPAPI_KEY) {
-      return await this.scrapeWithSerpAPI(source, keywords, location, filters);
-    }
-
-    throw new Error('No job scraping API configured. Set APIFY_API_TOKEN or SERPAPI_KEY in .env');
-  }
-
-  /**
    * Scrape jobs using SerpAPI Google Jobs
+   * Uses proper `location` parameter for geo-filtering (not embedded in query)
+   * Falls back to query-embedded location if location param returns 0 results
    */
-  async scrapeWithSerpAPI(source, keywords, location, filters) {
+  async scrapeWithSerpAPI(keywords, location, filters) {
+    if (!process.env.SERPAPI_KEY) {
+      throw new Error('SERPAPI_KEY not set in environment variables');
+    }
+
     const { getJson } = require('serpapi');
 
-    // Build search query based on source
-    let query = keywords;
-    if (source === 'linkedin') {
-      query = `${keywords} site:linkedin.com/jobs`;
-    } else if (source === 'indeed') {
-      query = `${keywords} site:indeed.com`;
-    } else if (source === 'glassdoor') {
-      query = `${keywords} site:glassdoor.com`;
-    }
+    // Primary: use SerpAPI's dedicated `location` parameter for google_jobs
+    // This is the correct approach — avoids gl/query conflicts
+    const primaryParams = {
+      engine: 'google_jobs',
+      api_key: process.env.SERPAPI_KEY,
+      q: keywords,
+      hl: 'en',
+    };
+    if (location) primaryParams.location = location;
 
-    logAgentActivity('jobSearch', `serpapi_scraping_${source}`, { query, location });
+    logAgentActivity('jobSearch', 'serpapi_search', { q: keywords, location });
+
+    let jobResults = [];
 
     try {
-      const response = await getJson({
-        engine: 'google_jobs',
-        api_key: process.env.SERPAPI_KEY,
-        q: query,
-        location: location || 'Pakistan',
-        hl: 'en',
-        gl: 'pk',
-        num: filters.limit || 20,
-      });
-
-      const jobResults = response.jobs_results || [];
-
-      return jobResults.map(job => {
-        // SerpAPI returns relative dates like "1 day ago" — convert to actual date or null
-        const rawPostedAt = job.detected_extensions?.posted_at;
-        let postedDate = null;
-        if (rawPostedAt) {
-          const now = new Date();
-          const match = rawPostedAt.match(/(\d+)\s+(hour|day|week|month)/i);
-          if (match) {
-            const num = parseInt(match[1]);
-            const unit = match[2].toLowerCase();
-            if (unit === 'hour') postedDate = new Date(now - num * 3600000);
-            else if (unit === 'day') postedDate = new Date(now - num * 86400000);
-            else if (unit === 'week') postedDate = new Date(now - num * 7 * 86400000);
-            else if (unit === 'month') postedDate = new Date(now - num * 30 * 86400000);
-          } else {
-            const parsed = new Date(rawPostedAt);
-            postedDate = isNaN(parsed.getTime()) ? null : parsed;
-          }
-        }
-
-        return {
-          title: job.title || '',
-          company: job.company_name || '',
-          location: job.location || location || '',
-          description: job.description || '',
-          source: source,
-          sourceUrl: job.related_links?.[0]?.link || `https://www.google.com/search?q=${encodeURIComponent((job.title || '') + ' ' + (job.company_name || ''))}`,
-          postedDate,
-          salary: job.detected_extensions?.salary || null,
-          requirements: [],
-          benefits: [],
-        };
-      });
-    } catch (error) {
-      logAgentActivity('jobSearch', `serpapi_error_${source}`, { error: error.message });
-      return [];
+      const response = await getJson(primaryParams);
+      jobResults = response.jobs_results || [];
+      logAgentActivity('jobSearch', 'serpapi_raw_results', { count: jobResults.length, method: 'location_param' });
+    } catch (err) {
+      logAgentActivity('jobSearch', 'serpapi_primary_failed', { error: err.message });
     }
+
+    // Fallback: if 0 results, try with location embedded in query (broader search)
+    if (jobResults.length === 0 && location) {
+      logAgentActivity('jobSearch', 'serpapi_fallback', { q: `${keywords} ${location}` });
+      try {
+        const fallbackResponse = await getJson({
+          engine: 'google_jobs',
+          api_key: process.env.SERPAPI_KEY,
+          q: `${keywords} ${location}`,
+          hl: 'en',
+        });
+        jobResults = fallbackResponse.jobs_results || [];
+        logAgentActivity('jobSearch', 'serpapi_raw_results', { count: jobResults.length, method: 'query_fallback' });
+      } catch (err) {
+        logAgentActivity('jobSearch', 'serpapi_fallback_failed', { error: err.message });
+      }
+    }
+
+    // Job boards to skip when looking for the company's own URL
+    const JOB_BOARD_DOMAINS = [
+      'linkedin.com', 'indeed.com', 'glassdoor.com', 'monster.com',
+      'ziprecruiter.com', 'rozee.pk', 'bayt.com', 'google.com',
+      'careerjet.com', 'simplyhired.com', 'jobstreet.com',
+    ];
+
+    return jobResults.map(job => {
+      const rawPostedAt = job.detected_extensions?.posted_at;
+      let postedDate = null;
+      if (rawPostedAt) {
+        const now = new Date();
+        const match = rawPostedAt.match(/(\d+)\s+(hour|day|week|month)/i);
+        if (match) {
+          const num = parseInt(match[1]);
+          const unit = match[2].toLowerCase();
+          if (unit === 'hour') postedDate = new Date(now - num * 3600000);
+          else if (unit === 'day') postedDate = new Date(now - num * 86400000);
+          else if (unit === 'week') postedDate = new Date(now - num * 7 * 86400000);
+          else if (unit === 'month') postedDate = new Date(now - num * 30 * 86400000);
+        }
+      }
+
+      // Find company's own careers page (first apply_option not from a job board)
+      const companyApplyUrl = (job.apply_options || []).find(opt => {
+        const link = opt.link || '';
+        return link.startsWith('http') && !JOB_BOARD_DOMAINS.some(d => link.includes(d));
+      })?.link || null;
+
+      // sourceUrl: prefer company's own page → related_links → any apply link → google search
+      const sourceUrl = companyApplyUrl
+        || job.related_links?.[0]?.link
+        || job.apply_options?.[0]?.link
+        || `https://www.google.com/search?q=${encodeURIComponent((job.title || '') + ' ' + (job.company_name || ''))}`;
+
+      return {
+        title: job.title || '',
+        company: job.company_name || '',
+        location: job.location || location || '',
+        description: job.description || '',
+        source: 'api',
+        sourceUrl,
+        companyApplyUrl,   // Company's own careers page — used for HR email domain
+        postedDate,
+        salary: job.detected_extensions?.salary || null,
+        thumbnail: job.thumbnail || null,
+        requirements: [],
+        benefits: [],
+      };
+    });
   }
 
   /**
@@ -379,10 +388,14 @@ class JobSearchAgent {
 
   /**
    * Calculate match scores for jobs
+   * Uses toObject() to convert Mongoose documents to plain objects before spreading
    */
   async calculateMatchScores(jobs, candidateProfile) {
     if (!candidateProfile || !candidateProfile.skills) {
-      return jobs.map(job => ({ ...job, matchScore: 0.5 }));
+      return jobs.map(job => ({
+        ...(job.toObject ? job.toObject() : job),
+        matchScore: 0.5,
+      }));
     }
 
     const candidateSkills = new Set(
@@ -390,25 +403,26 @@ class JobSearchAgent {
     );
 
     return jobs.map(job => {
+      // Convert Mongoose document to plain object to avoid spread issues
+      const jobObj = job.toObject ? job.toObject() : job;
+
       const jobSkills = new Set(
-        [...(job.requirements || []), ...(job.niceToHave || [])].map(s => s.toLowerCase())
+        [...(jobObj.requirements || []), ...(jobObj.niceToHave || [])].map(s => s.toLowerCase())
       );
 
       let matchedSkills = 0;
-      let totalRequired = jobSkills.size;
+      const totalRequired = jobSkills.size;
 
       candidateSkills.forEach(skill => {
-        if (jobSkills.has(skill)) {
-          matchedSkills++;
-        }
+        if (jobSkills.has(skill)) matchedSkills++;
       });
 
-      const matchScore = totalRequired > 0 
+      const matchScore = totalRequired > 0
         ? matchedSkills / Math.min(totalRequired, candidateSkills.size)
         : 0.5;
 
       return {
-        ...job,
+        ...jobObj,
         matchScore: Math.min(1, matchScore),
         matchedSkills: [...candidateSkills].filter(s => jobSkills.has(s)),
         missingSkills: [...jobSkills].filter(s => !candidateSkills.has(s)),
@@ -449,9 +463,10 @@ class JobSearchAgent {
           ...job,
           matchScore: job.matchScore || 0.5,
         });
-        savedJobs.push(newJob);
+        // Convert to plain object so spread works correctly downstream
+        savedJobs.push(newJob.toObject());
       } else {
-        savedJobs.push(existingJob);
+        savedJobs.push(existingJob.toObject());
       }
     }
 

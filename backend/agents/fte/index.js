@@ -11,10 +11,10 @@ const Memory = require('../../models/Memory');
 const Approval = require('../../models/Approval');
 const Application = require('../../models/Application');
 const Job = require('../../models/Job');
-const { ResumeBuilderChains, ApplyChains, FTEChains } = require('../../services/langchain/chains');
+const { ResumeBuilderChains, ApplyChains, FTEChains, OrchestratorChains } = require('../../services/langchain/chains');
 const { emailService } = require('../../services/emailService');
-const jobSearchAgent = require('../jobSearch');
 const { logAgentActivity } = require('../../services/langchain/langfuse');
+const OrchestratorAgent = require('../orchestrator');
 
 // ─── States ───────────────────────────────────────────────────────────────────
 const STATES = {
@@ -268,7 +268,10 @@ class FTEAgent {
       );
 
       const name = candidateProfile?.contactInfo?.name || candidateProfile?.name || 'aap';
-      const skillCount = candidateProfile?.skills?.length || 0;
+      const rawSkills = candidateProfile?.skills || [];
+      const skillCount = Array.isArray(rawSkills)
+        ? rawSkills.length
+        : Object.values(rawSkills).flat().length;
 
       logAgentActivity('fte', 'cv_uploaded', { userId, name, skillCount });
 
@@ -287,6 +290,7 @@ class FTEAgent {
 
   /**
    * Handle role+location capture from user message (both in one shot)
+   * Uses Orchestrator for intent detection + entity extraction
    */
   async handleRoleCapture(userId, message, fteState) {
     if (!message || message.trim().length === 0) {
@@ -300,15 +304,33 @@ class FTEAgent {
     let role = null;
     let location = null;
 
-    // Use LLM to extract both role and location from single message
+    // Use Orchestrator's intent detection to extract role + location entities
     try {
-      const entities = await FTEChains.extractEntity(text, userId);
-      role = entities.role || null;
-      location = entities.location || null;
-    } catch {
-      // Fallback: use full text as role, check for city via regex
-      role = text;
-      location = extractLocationFromText(text);
+      const intentResult = await OrchestratorChains.detectIntent(text, userId);
+      const entities = intentResult.entities || {};
+
+      // Role = first keyword/skill extracted by orchestrator
+      role = entities.keywords?.[0] || entities.skills?.[0] || null;
+      // Location = first location entity
+      location = entities.locations?.[0] || null;
+
+      logAgentActivity('fte', 'orchestrator_intent_detected', {
+        intent: intentResult.intent,
+        confidence: intentResult.confidence,
+        role,
+        location,
+      });
+    } catch (err) {
+      logAgentActivity('fte', 'orchestrator_fallback', { error: err.message });
+      // Fallback to FTEChains.extractEntity
+      try {
+        const entities = await FTEChains.extractEntity(text, userId);
+        role = entities.role || null;
+        location = entities.location || null;
+      } catch {
+        role = text;
+        location = extractLocationFromText(text);
+      }
     }
 
     // Fallback role if LLM returns null
@@ -364,26 +386,41 @@ class FTEAgent {
   }
 
   /**
-   * Async pipeline: search → generateCVs → create cv_review approval
+   * Async pipeline: Orchestrator coordinates jobSearch + resumeBuilder agents
+   * → creates cv_review approval for HITL
    * Fire-and-forget, state updated in MongoDB
    */
   async runPipelineAsync(userId) {
     const fteState = await getState(userId);
     logAgentActivity('fte', 'pipeline_started', { userId, role: fteState.role, location: fteState.location });
 
-    // ── STEP 1: Search jobs ──────────────────────────────────────────────────
+    // ── STEP 1: Search Jobs via Orchestrator → jobSearch agent ──────────────
+    const searchOrchestrator = new OrchestratorAgent(userId);
+    await searchOrchestrator.initialize(`fte_search_${Date.now()}`);
+
     let jobs = [];
     try {
-      const searchResult = await jobSearchAgent.searchJobs(userId, {
+      logAgentActivity('fte', 'orchestrator_search_start', { role: fteState.role, location: fteState.location });
+
+      const searchResults = await searchOrchestrator.executeTasks([{
+        id: 1,
+        agent: 'jobSearch',
+        action: 'search_jobs',
         keywords: fteState.role,
         location: fteState.location,
-        filters: { datePosted: 'week' },
-      });
-      jobs = searchResult.jobs || [];
-      logAgentActivity('fte', 'jobs_found', { count: jobs.length });
+        filters: {},
+      }]);
+
+      jobs = searchResults[1]?.data?.jobs || [];
+      logAgentActivity('fte', 'orchestrator_search_done', { count: jobs.length });
     } catch (err) {
       logAgentActivity('fte', 'search_error', { error: err.message });
-      jobs = [];
+      await setState(userId, {
+        state: STATES.CV_UPLOADED,
+        jobs: [],
+        error: `Job search fail: ${err.message}`,
+      });
+      return;
     }
 
     // Limit to 5 jobs max for CV generation
@@ -393,41 +430,84 @@ class FTEAgent {
       await setState(userId, {
         state: STATES.CV_UPLOADED,
         jobs: [],
-        error: 'Koi job nahi mili. Please role ya location change karein.',
+        error: `"${fteState.role}" ke liye "${fteState.location}" mein koi job nahi mili. Role ya city badal kar dobara try karein.`,
       });
       return;
     }
 
     await setState(userId, { state: STATES.GENERATING_CVS, jobs: selectedJobs });
 
-    // ── STEP 2: Generate tailored CVs per job ────────────────────────────────
-    const cvResults = [];
+    // ── STEP 2: Generate Tailored CVs via Orchestrator → resumeBuilder agent ─
+    const cvOrchestrator = new OrchestratorAgent(userId);
+    await cvOrchestrator.initialize(`fte_cv_${Date.now()}`);
+
     const currentState = await getState(userId);
     const candidateProfile = currentState.candidateProfile;
+    const cvResults = [];
 
-    for (const job of selectedJobs) {
+    for (let i = 0; i < selectedJobs.length; i++) {
+      const job = selectedJobs[i];
       try {
-        const cvResult = await ResumeBuilderChains.generateCV(candidateProfile, job, userId);
+        const cvTaskResults = await cvOrchestrator.executeTasks([{
+          id: i + 1,
+          agent: 'resumeBuilder',
+          action: 'generate_cv',
+          originalCV: candidateProfile,
+          targetJob: {
+            title:       job.title,
+            company:     job.company,
+            location:    job.location,
+            description: (job.description || '').substring(0, 800),
+            requirements: job.requirements || [],
+          },
+        }]);
+
+        // resumeBuilderAgent.generateCV returns { cv: generated, atsScore, recommendations }
+        // generated = { sections: {...}, atsScore, matchedKeywords, suggestions }
+        const cvData = cvTaskResults[i + 1]?.data;
+        const raw = cvData?.cv || cvData || {};
+        const sections = raw.sections || raw.cv?.sections || raw;
+        const skillsRaw = sections.skills || [];
+        const skillsFlat = Array.isArray(skillsRaw)
+          ? skillsRaw
+          : [
+              ...(skillsRaw.technical || []),
+              ...(skillsRaw.soft || []),
+              ...(skillsRaw.tools || []),
+            ];
+
+        const normalizedCV = {
+          contactInfo:    sections.contactInfo || {},
+          summary:        sections.summary || sections.professionalSummary || sections.profile || '',
+          experience:     sections.experience || [],
+          education:      sections.education || [],
+          skills:         skillsFlat,
+          certifications: sections.certifications || [],
+          languages:      sections.languages || [],
+        };
+
         cvResults.push({
           jobId: job._id?.toString() || job.id || String(Math.random()),
           job: {
-            title: job.title,
-            company: job.company,
-            location: job.location,
-            description: (job.description || '').substring(0, 300),
-            sourceUrl: job.sourceUrl || job.link,
+            title:       job.title,
+            company:     job.company,
+            location:    job.location,
+            description: (job.description || '').substring(0, 400),
+            sourceUrl:   job.sourceUrl || null,
+            salary:      job.salary || null,
           },
-          cv: cvResult.cv || cvResult,
-          atsScore: cvResult.atsScore || null,
-          recommendations: cvResult.recommendations || [],
+          cv:              normalizedCV,
+          atsScore:        cvData?.atsScore || raw.atsScore || null,
+          recommendations: cvData?.recommendations || raw.suggestions || [],
+          matchedKeywords: raw.matchedKeywords || [],
         });
       } catch (err) {
         logAgentActivity('fte', 'cv_generation_error', { job: job.title, error: err.message });
         cvResults.push({
           jobId: job._id?.toString() || String(Math.random()),
-          job: { title: job.title, company: job.company, location: job.location },
+          job: { title: job.title, company: job.company, location: job.location, sourceUrl: job.sourceUrl || null },
           cv: null,
-          atsScore: { overall: 0 },
+          atsScore: null,
           error: err.message,
         });
       }
@@ -494,7 +574,8 @@ class FTEAgent {
   }
 
   /**
-   * Async: find HR emails + draft emails → create email_review approval
+   * Async: find HR emails + draft emails via Orchestrator → apply agent
+   * → create email_review approval for HITL
    */
   async findEmailsAsync(userId) {
     const fteState = await getState(userId);
@@ -502,22 +583,66 @@ class FTEAgent {
 
     logAgentActivity('fte', 'finding_emails', { count: cvResults.length });
 
-    const emailDrafts = [];
-    const applyAgent = require('../apply');
+    // Initialize Orchestrator for email drafting
+    const emailOrchestrator = new OrchestratorAgent(userId);
+    await emailOrchestrator.initialize(`fte_email_${Date.now()}`);
 
-    for (const cvResult of cvResults) {
+    const emailDrafts = [];
+
+    for (let i = 0; i < cvResults.length; i++) {
+      const cvResult = cvResults[i];
       if (!cvResult.cv) continue; // skip failed CVs
       const { job } = cvResult;
       try {
-        // Find HR email
-        const emailResult = await applyAgent.findHREmails(userId, {
-          companyName: job.company,
-          website: null,
-        });
-        const hrEmails = emailResult.emails || [];
-        const hrEmail = hrEmails[0]?.email || null;
+        // ── Extract HR email from real company domain ────────────────────────
+        // Priority: companyApplyUrl > sourceUrl > company name slug
+        const JOB_BOARDS = ['google.com', 'linkedin.com', 'indeed.com', 'glassdoor.com',
+          'rozee.pk', 'bayt.com', 'monster.com', 'ziprecruiter.com'];
+
+        const extractDomain = (url) => {
+          if (!url) return null;
+          try {
+            const hostname = new URL(url).hostname.replace(/^www\./, '');
+            if (JOB_BOARDS.some(b => hostname.endsWith(b))) return null;
+            // Strip subdomains like 'careers.' or 'jobs.' to get root domain
+            const parts = hostname.split('.');
+            if (parts.length > 2 && ['careers', 'jobs', 'apply', 'work', 'portal'].includes(parts[0])) {
+              return parts.slice(1).join('.');
+            }
+            return hostname;
+          } catch { return null; }
+        };
+
+        // Try company's own URL first, then sourceUrl
+        const companyDomain = extractDomain(job.companyApplyUrl) || extractDomain(job.sourceUrl);
+
+        let hrEmail = null;
+
+        if (companyDomain) {
+          // Try common HR email prefixes — use hr@ as primary (most universal)
+          const candidates = ['hr', 'careers', 'jobs', 'recruiting', 'talent', 'recruitment'];
+          hrEmail = `${candidates[0]}@${companyDomain}`;
+          logAgentActivity('fte', 'email_from_domain', {
+            company: job.company,
+            email: hrEmail,
+            domain: companyDomain,
+            source: job.companyApplyUrl ? 'company_url' : 'source_url',
+          });
+        }
+
+        // Last resort: derive domain from company name (better than nothing)
         if (!hrEmail) {
-          // No real email found — skip this company
+          const slug = (job.company || '').toLowerCase()
+            .replace(/\s+(pvt|ltd|inc|corp|llc|private|limited|pakistan|pk)\.?\s*/gi, '')
+            .replace(/[^a-z0-9]+/g, '')
+            .substring(0, 25);
+          if (slug) {
+            hrEmail = `hr@${slug}.com`;
+            logAgentActivity('fte', 'email_from_name_slug', { company: job.company, email: hrEmail });
+          }
+        }
+
+        if (!hrEmail) {
           logAgentActivity('fte', 'email_not_found', { company: job.company });
           emailDrafts.push({
             jobId: cvResult.jobId,
@@ -527,26 +652,36 @@ class FTEAgent {
             body: null,
             cvPath: cvFilePath,
             atsScore: cvResult.atsScore,
-            error: 'HR email nahi mili — skip kar diya',
+            error: 'HR email derive nahi ho saki',
           });
           continue;
         }
 
-        // Draft email
-        const draft = await ApplyChains.draftEmail(
-          candidateProfile,
-          { title: job.title, company: job.company, location: job.location, description: job.description || '' },
-          job.company,
+        // ── Draft email via Orchestrator → apply agent ──────────────────────
+        const emailTaskResults = await emailOrchestrator.executeTasks([{
+          id: i + 1,
+          agent: 'apply',
+          action: 'draft_email',
+          targetJob: {
+            title:       job.title,
+            company:     job.company,
+            location:    job.location,
+            description: job.description || '',
+          },
           hrEmail,
-          userId
-        );
+          candidateInfo: candidateProfile,
+        }]);
 
+        const draft = emailTaskResults[i + 1]?.data;
+
+        const candidateName = candidateProfile?.contactInfo?.name || 'Applicant';
+        const fallbackBody = `Dear Hiring Manager,\n\nI am writing to express my strong interest in the ${job.title} position at ${job.company}. With my background and experience, I believe I would be a valuable addition to your team.\n\nPlease find my CV attached for your review. I look forward to the opportunity to discuss how my skills align with your requirements.\n\nBest regards,\n${candidateName}`;
         emailDrafts.push({
           jobId: cvResult.jobId,
           job,
           hrEmail,
-          subject: draft.subject || `Application for ${job.title} — ${candidateProfile?.contactInfo?.name || 'Candidate'}`,
-          body: draft.body || draft.emailBody || draft.content || '',
+          subject: draft?.subject || `Application for ${job.title} — ${candidateName}`,
+          body: draft?.body || draft?.emailBody || draft?.content || fallbackBody,
           cvPath: cvFilePath,
           atsScore: cvResult.atsScore,
         });
@@ -630,6 +765,19 @@ class FTEAgent {
 
     logAgentActivity('fte', 'sending_emails', { count: emailDrafts.length });
 
+    // Verify SMTP connection before attempting sends
+    const smtpOk = await emailService.verifyConnection();
+    if (!smtpOk) {
+      console.error('[FTE] SMTP connection FAILED. Check EMAIL_USER and EMAIL_PASS in .env');
+      console.error(`[FTE] EMAIL_USER=${process.env.EMAIL_USER}, EMAIL_HOST=${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
+      await setState(userId, {
+        state: STATES.DONE,
+        sendResults: [{ success: false, error: 'Gmail SMTP connection failed. Check EMAIL_USER and EMAIL_PASS in .env (must be a Gmail App Password).' }],
+      });
+      return;
+    }
+    console.log('[FTE] SMTP connection verified. Starting email sends...');
+
     const sendResults = [];
 
     for (const draft of emailDrafts) {
@@ -647,10 +795,15 @@ class FTEAgent {
       }
 
       try {
+        // Ensure body is never empty — fallback to simple template
+        const emailBody = draft.body || `Dear Hiring Manager,\n\nI am applying for the ${draft.job?.title || 'position'} role at ${draft.job?.company || 'your company'}. Please find my CV attached.\n\nBest regards,\n${userName}`;
+        const emailSubject = draft.subject || `Application for ${draft.job?.title || 'Position'} — ${userName}`;
+
+        console.log(`[FTE] Sending email to ${draft.hrEmail} for ${draft.job?.company}...`);
         const result = await emailService.sendApplicationEmail({
           to: draft.hrEmail,
-          subject: draft.subject,
-          body: draft.body,
+          subject: emailSubject,
+          body: emailBody,
           cvPath: draft.cvPath,
           userName,
           companyName: draft.job?.company,
@@ -667,8 +820,8 @@ class FTEAgent {
               company: draft.job.company,
               location: draft.job.location,
               description: draft.job.description || '',
-              source: 'serpapi',
-              sourceUrl: draft.job.sourceUrl || '',
+              source: 'api',
+              sourceUrl: draft.job.sourceUrl || null,
               status: 'new',
             },
             { upsert: true, new: true }
@@ -707,7 +860,9 @@ class FTEAgent {
 
         logAgentActivity('fte', 'email_sent', { company: draft.job?.company, to: draft.hrEmail });
       } catch (err) {
-        logAgentActivity('fte', 'email_send_failed', { company: draft.job?.company, error: err.message });
+        console.error(`[FTE] Email send FAILED for ${draft.job?.company} → ${draft.hrEmail}:`, err.message);
+        if (err.code) console.error(`[FTE] SMTP error code: ${err.code}, response: ${err.response || err.responseCode}`);
+        logAgentActivity('fte', 'email_send_failed', { company: draft.job?.company, error: err.message, code: err.code });
         sendResults.push({
           jobId: draft.jobId,
           company: draft.job?.company,

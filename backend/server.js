@@ -1,9 +1,10 @@
+require('dotenv').config(); // Must be FIRST — loads env vars before anything else
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-require('dotenv').config();
 
 const app = express();
 
@@ -69,8 +70,26 @@ app.use('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+
+  // ── Verify email service on startup ────────────────────────────────────────
+  try {
+    const { emailService } = require('./services/emailService');
+    const ok = await emailService.verifyConnection();
+    if (ok) {
+      console.log(`✅ Email service ready — ${process.env.EMAIL_USER}`);
+    } else {
+      console.warn(`⚠️  Email service NOT connected — check EMAIL_USER / EMAIL_PASS in .env`);
+    }
+  } catch (e) {
+    console.warn(`⚠️  Email service error: ${e.message}`);
+  }
+
+  // ── Confirm API keys ────────────────────────────────────────────────────────
+  console.log(`🔑 SERPAPI_KEY: ${process.env.SERPAPI_KEY ? '✅ set' : '❌ MISSING'}`);
+  console.log(`🔑 GROQ_API_KEY: ${process.env.GROQ_API_KEY ? '✅ set' : '❌ MISSING'}`);
+  console.log(`🔑 EMAIL_USER: ${process.env.EMAIL_USER || '❌ MISSING'}`);
 });
 
 module.exports = app;

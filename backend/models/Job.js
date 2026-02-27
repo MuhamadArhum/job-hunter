@@ -49,6 +49,11 @@ const jobSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  companyApplyUrl: {
+    type: String,
+    trim: true,
+    default: null,
+  },
   requirements: {
     type: [String],
     default: [],

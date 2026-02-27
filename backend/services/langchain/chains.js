@@ -17,10 +17,18 @@ const GROQ_MODELS = [
 // Track which model to use (rotates on rate-limit)
 let currentModelIndex = 0;
 
-function isRateLimitError(error) {
-  const msg = error?.message || '';
+function isFallbackError(error) {
+  const msg = (error?.message || '').toLowerCase();
   const status = error?.status || error?.response?.status;
-  return status === 429 || msg.includes('429') || msg.toLowerCase().includes('rate limit');
+  return (
+    status === 429 ||
+    msg.includes('429') ||
+    msg.includes('rate limit') ||
+    msg.includes('decommissioned') ||
+    msg.includes('no longer supported') ||
+    msg.includes('model not found') ||
+    msg.includes('does not exist')
+  );
 }
 
 /**
@@ -68,7 +76,7 @@ const runPrompt = async (prompt, params = {}, options = {}) => {
           { role: 'user', content: filledPrompt }
         ],
         temperature: 0.3,
-        max_tokens: 4000,
+        max_tokens: 8000,
         response_format: { type: 'json_object' },
       });
 
@@ -105,13 +113,14 @@ const runPrompt = async (prompt, params = {}, options = {}) => {
     } catch (error) {
       lastError = error;
 
-      if (isRateLimitError(error)) {
-        // Rate limited — try next model
-        logAgentActivity(agentName, 'model_rate_limited', {
+      if (isFallbackError(error)) {
+        // Rate-limited or decommissioned — try next model
+        logAgentActivity(agentName, 'model_fallback', {
           model,
+          reason: error.message?.substring(0, 80),
           nextModel: GROQ_MODELS[(modelIdx + 1) % GROQ_MODELS.length],
         });
-        console.warn(`[LLM] Rate limit on ${model}, switching to next model...`);
+        console.warn(`[LLM] Falling back from ${model}: ${error.message?.substring(0, 60)}`);
         continue;
       }
 

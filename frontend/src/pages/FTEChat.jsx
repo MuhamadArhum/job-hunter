@@ -524,31 +524,40 @@ export default function FTEChat() {
         const res = await fteApi.getState();
         const s = res.data;
 
-        // Check for error (even if state unchanged)
-        if (s.error && ASYNC_STATES.has(s.state)) {
-          setCurrentState('cv_uploaded');
-          addBotMessage('text', `Masla aaya: ${s.error}\n\nDobara shuru karne ke liye **New Chat** button ya **/reset** use karein.`);
+        // State hasn't changed — still check if a new error appeared in background
+        if (s.state === currentState) {
+          if (s.error) {
+            // Error appeared while in same async state — show and stop polling
+            setCurrentState('cv_uploaded');
+            addBotMessage('text', `❌ Masla aaya: ${s.error}\n\n**New Chat** button se dobara try karein.`);
+          }
           return;
         }
 
-        if (s.state === currentState) return;
-
+        // State changed
         setCurrentState(s.state);
 
+        // If new state is non-async AND has error → job search / pipeline failed
+        if (s.error && !ASYNC_STATES.has(s.state)) {
+          addBotMessage('text', `❌ ${s.error}\n\nRole ya city change karke **New Chat** se dobara try karein.`);
+          return;
+        }
+
         if (s.state === 'generating_cvs') {
-          addBotMessage('status', `${s.jobs?.length || 0} jobs mili! CVs bana raha hoon...`);
+          addBotMessage('status', `🔍 ${s.jobs?.length || 0} jobs mili! Tailored CVs bana raha hoon...`);
         } else if (s.state === 'cv_review' && s.cvResults?.length) {
-          addBotMessage('cv_approval', `${s.cvResults.length} tailored CVs tayyar hain!`, {
+          addBotMessage('cv_approval', `${s.cvResults.length} tailored CVs tayyar hain! Review karein:`, {
             cvResults: s.cvResults, cvReviewApprovalId: s.cvReviewApprovalId,
           });
         } else if (s.state === 'finding_emails') {
-          addBotMessage('status', 'CVs approved! HR emails dhundh raha hoon...');
-        } else if (s.state === 'email_review' && s.emailDrafts?.length) {
-          addBotMessage('email_approval', `${s.emailDrafts.filter(d => d.hrEmail).length} email drafts tayyar hain!`, {
-            emailDrafts: s.emailDrafts, emailReviewApprovalId: s.emailReviewApprovalId,
+          addBotMessage('status', '✓ CVs approved! HR emails dhundh raha hoon...');
+        } else if (s.state === 'email_review') {
+          const validDrafts = (s.emailDrafts || []).filter(d => d.hrEmail);
+          addBotMessage('email_approval', `${validDrafts.length} email drafts tayyar hain! Review karein:`, {
+            emailDrafts: s.emailDrafts || [], emailReviewApprovalId: s.emailReviewApprovalId,
           });
         } else if (s.state === 'done') {
-          addBotMessage('result', 'Sab applications send ho gayi!', { sendResults: s.sendResults });
+          addBotMessage('result', '✅ Applications send ho gayi!', { sendResults: s.sendResults });
         }
       } catch {
         // ignore transient polling errors

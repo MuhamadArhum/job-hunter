@@ -235,36 +235,55 @@ Extract and return:
   "languages": []
 }`,
 
-  cvGeneration: `You are generating an ATS-optimized CV tailored to a specific job.
+  cvGeneration: `You are an expert CV writer. Generate a tailored, ATS-optimized CV for the target job using the candidate's original CV data.
 
-Original CV: {{originalCV}}
-Target Job: {{targetJob}}
+Candidate CV:
+{{originalCV}}
 
-Guidelines:
-1. Match keywords from job description
-2. Use standard ATS-friendly format
-3. Quantify achievements where possible
-4. Keep it concise (max 2 pages)
-5. Focus on relevant experience
+Target Job:
+{{targetJob}}
 
-Return the generated CV in sections:
+Instructions:
+1. Rewrite the summary to match the job requirements
+2. Highlight relevant skills from the candidate's profile that match the job
+3. Reorder/emphasize relevant experience
+4. Keep all contact info exactly as in original CV
+5. Add keywords from the job description naturally
+
+Return ONLY this JSON (no extra text):
 {
   "sections": {
-    "contactInfo": {...},
-    "summary": "...",
-    "experience": [...],
-    "education": [...],
-    "skills": {...}
+    "contactInfo": {
+      "name": "Full Name",
+      "email": "email",
+      "phone": "phone",
+      "location": "city"
+    },
+    "summary": "2-3 sentence tailored professional summary",
+    "skills": ["skill1", "skill2", "skill3"],
+    "experience": [
+      {
+        "role": "Job Title",
+        "company": "Company Name",
+        "duration": "Jan 2020 - Present",
+        "achievements": ["achievement 1", "achievement 2"]
+      }
+    ],
+    "education": [
+      {
+        "degree": "Degree Name",
+        "institution": "University Name",
+        "year": "2020"
+      }
+    ]
   },
   "atsScore": {
-    "format": 95,
-    "keywords": 88,
-    "content": 90,
-    "overall": 91
+    "overall": 85,
+    "keywords": 80,
+    "format": 90
   },
   "matchedKeywords": ["keyword1", "keyword2"],
-  "missingKeywords": ["keyword3"],
-  "suggestions": ["suggestion1"]
+  "suggestions": ["improvement 1", "improvement 2"]
 }`,
 
   coverLetter: `You are writing a personalized cover letter.
@@ -317,29 +336,21 @@ Return:
   }
 }`,
 
-  emailDrafting: `You are drafting a job application email.
+  emailDrafting: `You are drafting a professional job application email.
 
-Candidate: {{candidateInfo}}
-Target job: {{targetJob}}
+Candidate Info:
+{{candidateInfo}}
+
+Target Job:
+{{targetJob}}
+
 Company: {{companyName}}
-HR email: {{hrEmail}}
+HR Email: {{hrEmail}}
 
-Write a professional application email with:
-1. Compelling subject line
-2. Professional greeting
-3. Introduction stating the position
-4. Key qualifications (3-4 bullet points)
-5. Why this company interests them
-6. Call to action
-7. Professional closing
-
-Return:
+Write a concise, professional application email. Return ONLY this JSON:
 {
-  "subject": "Application for [Position] - [Your Name]",
-  "body": "Full email body...",
-  "attachments": ["resume.pdf", "cover_letter.pdf"],
-  "tone": "professional_enthusiastic",
-  "estimatedReadTime": "2 minutes"
+  "subject": "Application for [Job Title] - [Candidate Name]",
+  "body": "Dear Hiring Manager,\n\n[3-4 paragraph email body here]\n\nBest regards,\n[Candidate Name]"
 }`,
 };
 
