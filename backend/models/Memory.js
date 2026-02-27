@@ -19,7 +19,7 @@ const memorySchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['conversation', 'preferences', 'history', 'knowledge', 'templates', 'company', 'custom', 'pending_plan', 'pipeline', 'resume'],
+    enum: ['conversation', 'preferences', 'history', 'knowledge', 'templates', 'company', 'custom', 'pending_plan', 'pipeline', 'resume', 'fte_state', 'fte_history'],
     default: 'conversation',
   },
   key: {

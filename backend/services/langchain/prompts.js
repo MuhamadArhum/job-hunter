@@ -422,10 +422,25 @@ Return:
 }`,
 };
 
+const FTE_PROMPTS = {
+  extractEntity: `Extract the job role and city/location from the user message.
+Return ONLY valid JSON with exactly these two fields:
+{ "role": string or null, "location": string or null }
+
+Rules:
+- role = the job title or position they are looking for (e.g. "Software Engineer", "Data Analyst")
+- location = the city, country, or "Remote" (e.g. "Karachi", "Lahore", "Remote")
+- If a field is not mentioned in the message, set it to null
+- Do not add any explanation or markdown, just the JSON object
+
+Message: {{message}}`,
+};
+
 module.exports = {
   ORCHESTRATOR_PROMPTS,
   JOB_SEARCH_PROMPTS,
   RESUME_BUILDER_PROMPTS,
   APPLY_PROMPTS,
   PREP_PROMPTS,
+  FTE_PROMPTS,
 };

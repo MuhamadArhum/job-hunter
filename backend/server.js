@@ -49,6 +49,7 @@ app.use('/api/email', emailLimiter, require('./routes/email'));
 app.use('/api/test', require('./routes/test'));
 app.use('/api/orchestrator', require('./routes/orchestrator'));
 app.use('/api/pipeline', require('./routes/pipeline'));
+app.use('/api/fte', require('./routes/fte'));
 
 // File upload handling
 app.use('/uploads', express.static('uploads'));

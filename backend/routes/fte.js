@@ -1,0 +1,170 @@
+/**
+ * FTE (Digital Full-Time Employee) Routes
+ * Conversational API: upload CV → capture role → search → generate CVs → approve → send emails
+ */
+
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const authMiddleware = require('../middleware/auth');
+const fteAgent = require('../agents/fte');
+
+// ─── Multer for CV upload ─────────────────────────────────────────────────────
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../uploads/cvs');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `cv_${req.user._id}_${Date.now()}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  },
+});
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/fte/chat
+ * Main conversational entry point. Accepts optional CV file upload.
+ */
+router.post(
+  '/chat',
+  authMiddleware,
+  (req, res, next) => {
+    upload.single('cv')(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({ success: false, error: err.message });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const userId = req.user._id;
+      const message = req.body.message || '';
+      const uploadedFile = req.file || null;
+
+      const result = await fteAgent.chat(userId, message, uploadedFile);
+
+      res.json({
+        success: true,
+        botMessage: result.botMessage,
+        state: result.state,
+        data: result.data || null,
+      });
+    } catch (error) {
+      console.error('FTE chat error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /api/fte/state
+ * Returns current FTE state (used for polling during async operations)
+ */
+router.get('/state', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const state = await fteAgent.getStateForUser(userId);
+    res.json({ success: true, ...state });
+  } catch (error) {
+    console.error('FTE state error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/fte/approve-cvs
+ * User approves generated CVs → trigger email finding
+ * Body: { approvalId, selectedJobIds? }
+ */
+router.post('/approve-cvs', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { approvalId, selectedJobIds } = req.body;
+
+    if (!approvalId) {
+      return res.status(400).json({ success: false, error: 'approvalId is required' });
+    }
+
+    const result = await fteAgent.approveCVs(userId, approvalId, selectedJobIds);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('FTE approve-cvs error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/fte/approve-emails
+ * User approves email drafts → send all emails
+ * Body: { approvalId, modifiedEmails? }
+ */
+router.post('/approve-emails', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { approvalId, modifiedEmails } = req.body;
+
+    if (!approvalId) {
+      return res.status(400).json({ success: false, error: 'approvalId is required' });
+    }
+
+    const result = await fteAgent.approveEmails(userId, approvalId, modifiedEmails);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('FTE approve-emails error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/fte/history
+ * Returns list of past completed sessions
+ */
+router.get('/history', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const history = await fteAgent.getHistory(userId);
+    res.json({ success: true, history });
+  } catch (error) {
+    console.error('FTE history error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/fte/reset
+ * Reset FTE state to start over
+ */
+router.post('/reset', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    await fteAgent.resetUser(userId);
+    res.json({
+      success: true,
+      botMessage: 'Reset ho gaya! Apni CV upload karein.',
+      state: 'waiting_cv',
+    });
+  } catch (error) {
+    console.error('FTE reset error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+module.exports = router;
