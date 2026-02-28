@@ -60,7 +60,7 @@ class JobSearchAgent {
     // Single SerpAPI call — no source loop, no site: filters that break google_jobs engine
     let allJobs = [];
     try {
-      allJobs = await this.scrapeWithSerpAPI(keywords, location, filters);
+      allJobs = await this.scrapeWithSerpAPI(keywords, location, filters, userId);
     } catch (error) {
       logAgentActivity('jobSearch', 'scraping_failed', { error: error.message });
       throw error;
@@ -96,28 +96,58 @@ class JobSearchAgent {
   }
 
   /**
-   * Scrape jobs using SerpAPI Google Jobs
-   * Uses proper `location` parameter for geo-filtering (not embedded in query)
-   * Falls back to query-embedded location if location param returns 0 results
+   * Use LLM to resolve any location string → { normalizedLocation, gl }
+   * Works for any city/country in the world — no hardcoding
    */
-  async scrapeWithSerpAPI(keywords, location, filters) {
+  async resolveLocation(location, userId) {
+    if (!location) return { normalizedLocation: null, gl: null };
+    const lower = location.toLowerCase().trim();
+    // Remote / anywhere → no location filter
+    if (['remote', 'anywhere', 'worldwide', 'online'].includes(lower)) {
+      return { normalizedLocation: 'Remote', gl: null };
+    }
+    try {
+      const { FTEChains } = require('../../services/langchain/chains');
+      const result = await FTEChains.extractLocation(location, userId);
+      const city        = (result.city        || location).trim();
+      const country     = (result.country     || '').trim();
+      const countryCode = (result.countryCode || '').toLowerCase().trim();
+      const normalizedLocation = country ? `${city}, ${country}` : city;
+      const gl = countryCode || null;
+      logAgentActivity('jobSearch', 'location_resolved', { input: location, normalizedLocation, gl });
+      return { normalizedLocation, gl };
+    } catch (err) {
+      // LLM failed — pass location as-is, SerpAPI will try its best
+      logAgentActivity('jobSearch', 'location_resolve_failed', { error: err.message });
+      return { normalizedLocation: location, gl: null };
+    }
+  }
+
+  /**
+   * Scrape jobs using SerpAPI Google Jobs
+   * Location resolved via LLM — works for any city worldwide, no hardcoding
+   */
+  async scrapeWithSerpAPI(keywords, location, filters, userId) {
     if (!process.env.SERPAPI_KEY) {
       throw new Error('SERPAPI_KEY not set in environment variables');
     }
 
     const { getJson } = require('serpapi');
 
-    // Primary: use SerpAPI's dedicated `location` parameter for google_jobs
-    // This is the correct approach — avoids gl/query conflicts
+    // LLM resolves "Karachi" → "Karachi, Pakistan" + gl: "pk"
+    const { normalizedLocation, gl } = await this.resolveLocation(location, userId);
+
     const primaryParams = {
       engine: 'google_jobs',
       api_key: process.env.SERPAPI_KEY,
       q: keywords,
       hl: 'en',
+      num: '20',
     };
-    if (location) primaryParams.location = location;
+    if (normalizedLocation) primaryParams.location = normalizedLocation;
+    if (gl) primaryParams.gl = gl;
 
-    logAgentActivity('jobSearch', 'serpapi_search', { q: keywords, location });
+    logAgentActivity('jobSearch', 'serpapi_search', { q: keywords, location: normalizedLocation, gl });
 
     let jobResults = [];
 
@@ -129,16 +159,19 @@ class JobSearchAgent {
       logAgentActivity('jobSearch', 'serpapi_primary_failed', { error: err.message });
     }
 
-    // Fallback: if 0 results, try with location embedded in query (broader search)
-    if (jobResults.length === 0 && location) {
-      logAgentActivity('jobSearch', 'serpapi_fallback', { q: `${keywords} ${location}` });
+    // Fallback: embed location in query string (broader, works for any city)
+    if (jobResults.length === 0 && normalizedLocation) {
+      logAgentActivity('jobSearch', 'serpapi_fallback', { q: `${keywords} ${normalizedLocation}` });
       try {
-        const fallbackResponse = await getJson({
+        const fallbackParams = {
           engine: 'google_jobs',
           api_key: process.env.SERPAPI_KEY,
-          q: `${keywords} ${location}`,
+          q: `${keywords} ${normalizedLocation}`,
           hl: 'en',
-        });
+          num: '20',
+        };
+        if (gl) fallbackParams.gl = gl;
+        const fallbackResponse = await getJson(fallbackParams);
         jobResults = fallbackResponse.jobs_results || [];
         logAgentActivity('jobSearch', 'serpapi_raw_results', { count: jobResults.length, method: 'query_fallback' });
       } catch (err) {

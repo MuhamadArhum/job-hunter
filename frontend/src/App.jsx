@@ -3,8 +3,16 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Jobs from './pages/Jobs';
+import JobDetails from './pages/JobDetails';
+import Applications from './pages/Applications';
+import ApplicationReview from './pages/ApplicationReview';
+import Profile from './pages/Profile';
+import Orchestrator from './pages/Orchestrator';
 import FTEChat from './pages/FTEChat';
 import './index.css';
 
@@ -17,25 +25,11 @@ const queryClient = new QueryClient({
   },
 });
 
-// Protect /chat — redirect to /login if not authenticated
-function ProtectedChat() {
-  const { user, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-400 text-sm">Loading...</div>
-      </div>
-    );
-  }
-  if (!user) return <Navigate to="/login" replace />;
-  return <FTEChat />;
-}
-
 // Redirect logged-in users away from login/register
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/chat" replace />;
+  if (user) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -44,8 +38,20 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-      <Route path="/chat" element={<ProtectedChat />} />
-      <Route path="*" element={<Navigate to="/chat" replace />} />
+      
+      {/* Protected Routes with Navbar */}
+      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/jobs" element={<ProtectedRoute><Jobs /></ProtectedRoute>} />
+      <Route path="/jobs/:id" element={<ProtectedRoute><JobDetails /></ProtectedRoute>} />
+      <Route path="/applications" element={<ProtectedRoute><Applications /></ProtectedRoute>} />
+      <Route path="/applications/:id/review" element={<ProtectedRoute><ApplicationReview /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+      <Route path="/orchestrator" element={<ProtectedRoute><Orchestrator /></ProtectedRoute>} />
+      <Route path="/chat" element={<ProtectedRoute><FTEChat /></ProtectedRoute>} />
+      
+      {/* Default redirect */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }

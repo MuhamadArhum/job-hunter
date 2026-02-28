@@ -3,7 +3,7 @@
  * Provides chain execution utilities for agents
  */
 
-const { getGroqClient, createTrace, logAgentActivity } = require('./langfuse');
+const { getGroqClient, getOpenAIClient, getDeepSeekClient, getOpenRouterClient, getMiniMaxClient, getGeminiClient, createTrace, logAgentActivity } = require('./langfuse');
 const { ORCHESTRATOR_PROMPTS, JOB_SEARCH_PROMPTS, RESUME_BUILDER_PROMPTS, APPLY_PROMPTS, PREP_PROMPTS, FTE_PROMPTS } = require('./prompts');
 
 // ── Model fallback list (tried in order when rate-limited) ────────────────────
@@ -72,10 +72,10 @@ const runPrompt = async (prompt, params = {}, options = {}) => {
       const response = await groq.chat.completions.create({
         model,
         messages: [
-          { role: 'system', content: 'You are a helpful AI assistant for a job hunting system. Always respond with valid JSON only. No markdown, no code blocks, just raw JSON.' },
+          { role: 'system', content: 'You are a strict JSON-only responder for a job hunting system. Output ONLY valid JSON. No markdown, no code blocks, no explanations, no extra text — just the raw JSON object.' },
           { role: 'user', content: filledPrompt }
         ],
-        temperature: 0.3,
+        temperature: 0.1,
         max_tokens: 8000,
         response_format: { type: 'json_object' },
       });
@@ -130,9 +130,264 @@ const runPrompt = async (prompt, params = {}, options = {}) => {
     }
   }
 
-  // All models exhausted
-  logAgentActivity(agentName, 'all_models_rate_limited', { error: lastError?.message });
-  throw new Error(`All LLM models rate-limited. Please wait a few minutes and try again. Last error: ${lastError?.message}`);
+  // ── All Groq models exhausted → try DeepSeek as second fallback ─────────────
+  if (process.env.DEEPSEEK_API_KEY) {
+    const DEEPSEEK_MODELS = ['deepseek-chat'];
+    logAgentActivity(agentName, 'switching_to_deepseek', { reason: 'all_groq_models_rate_limited' });
+    console.warn('[LLM] All Groq models rate-limited. Trying DeepSeek fallback...');
+
+    for (const model of DEEPSEEK_MODELS) {
+      try {
+        logAgentActivity(agentName, 'trying_model', { model, provider: 'deepseek' });
+        const deepseek = getDeepSeekClient();
+        const generation = trace.generation({ name: `${agentName}_generation`, model });
+
+        const response = await deepseek.chat.completions.create({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a strict JSON-only responder for a job hunting system. Output ONLY valid JSON. No markdown, no code blocks, no explanations, no extra text — just the raw JSON object.' },
+            { role: 'user', content: filledPrompt },
+          ],
+          temperature: 0.1,
+          max_tokens: 8000,
+        });
+
+        const content = response.choices[0].message.content.trim();
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch (e) {
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+          else throw new Error(`DeepSeek JSON parse failed: ${content.substring(0, 200)}`);
+        }
+
+        generation.end({
+          output: parsed,
+          usage: { inputTokens: response.usage?.prompt_tokens || 0, outputTokens: response.usage?.completion_tokens || 0 },
+        });
+        trace.end();
+
+        logAgentActivity(agentName, 'prompt_completed', { success: true, model, provider: 'deepseek' });
+        return parsed;
+
+      } catch (err) {
+        logAgentActivity(agentName, 'deepseek_model_failed', { model, error: err.message });
+        console.warn(`[LLM] DeepSeek ${model} failed: ${err.message?.substring(0, 60)}`);
+        if (isFallbackError(err)) continue;
+        throw err;
+      }
+    }
+  }
+
+  // ── All Groq + DeepSeek exhausted → try OpenRouter (free models) ─────────────
+  if (process.env.OPENROUTER_API_KEY) {
+    const OPENROUTER_MODELS = [
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'google/gemma-2-9b-it:free',
+      'mistralai/mistral-7b-instruct:free',
+    ];
+    logAgentActivity(agentName, 'switching_to_openrouter', { reason: 'groq_and_deepseek_exhausted' });
+    console.warn('[LLM] Groq + DeepSeek exhausted. Trying OpenRouter free models...');
+
+    for (const model of OPENROUTER_MODELS) {
+      try {
+        logAgentActivity(agentName, 'trying_model', { model, provider: 'openrouter' });
+        const openrouter = getOpenRouterClient();
+        const generation = trace.generation({ name: `${agentName}_generation`, model });
+
+        const response = await openrouter.chat.completions.create({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a strict JSON-only responder for a job hunting system. Output ONLY valid JSON. No markdown, no code blocks, no explanations, no extra text — just the raw JSON object.' },
+            { role: 'user', content: filledPrompt },
+          ],
+          temperature: 0.1,
+          max_tokens: 8000,
+        });
+
+        const content = response.choices[0].message.content.trim();
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch (e) {
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+          else throw new Error(`OpenRouter JSON parse failed: ${content.substring(0, 200)}`);
+        }
+
+        generation.end({
+          output: parsed,
+          usage: { inputTokens: response.usage?.prompt_tokens || 0, outputTokens: response.usage?.completion_tokens || 0 },
+        });
+        trace.end();
+
+        logAgentActivity(agentName, 'prompt_completed', { success: true, model, provider: 'openrouter' });
+        return parsed;
+
+      } catch (err) {
+        logAgentActivity(agentName, 'openrouter_model_failed', { model, error: err.message });
+        console.warn(`[LLM] OpenRouter ${model} failed: ${err.message?.substring(0, 60)}`);
+        if (isFallbackError(err)) continue;
+        throw err;
+      }
+    }
+  }
+
+  // ── All Groq + DeepSeek + OpenRouter exhausted → try MiniMax ────────────────
+  if (process.env.MINIMAX_API_KEY) {
+    const MINIMAX_MODELS = ['MiniMax-Text-01', 'abab6.5s-chat'];
+    logAgentActivity(agentName, 'switching_to_minimax', { reason: 'groq_deepseek_openrouter_exhausted' });
+    console.warn('[LLM] Trying MiniMax fallback...');
+
+    for (const model of MINIMAX_MODELS) {
+      try {
+        logAgentActivity(agentName, 'trying_model', { model, provider: 'minimax' });
+        const minimax = getMiniMaxClient();
+        const generation = trace.generation({ name: `${agentName}_generation`, model });
+
+        const response = await minimax.chat.completions.create({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a strict JSON-only responder for a job hunting system. Output ONLY valid JSON. No markdown, no code blocks, no explanations, no extra text — just the raw JSON object.' },
+            { role: 'user', content: filledPrompt },
+          ],
+          temperature: 0.1,
+          max_tokens: 8000,
+        });
+
+        const content = response.choices[0].message.content.trim();
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch (e) {
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+          else throw new Error(`MiniMax JSON parse failed: ${content.substring(0, 200)}`);
+        }
+
+        generation.end({
+          output: parsed,
+          usage: { inputTokens: response.usage?.prompt_tokens || 0, outputTokens: response.usage?.completion_tokens || 0 },
+        });
+        trace.end();
+
+        logAgentActivity(agentName, 'prompt_completed', { success: true, model, provider: 'minimax' });
+        return parsed;
+
+      } catch (err) {
+        logAgentActivity(agentName, 'minimax_model_failed', { model, error: err.message });
+        console.warn(`[LLM] MiniMax ${model} failed: ${err.message?.substring(0, 60)}`);
+        if (isFallbackError(err)) continue;
+        throw err;
+      }
+    }
+  }
+
+  // ── All above exhausted → try Google Gemini ──────────────────────────────────
+  if (process.env.GEMINI_API_KEY) {
+    const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    logAgentActivity(agentName, 'switching_to_gemini', { reason: 'groq_deepseek_openrouter_minimax_exhausted' });
+    console.warn('[LLM] Trying Google Gemini fallback...');
+
+    for (const model of GEMINI_MODELS) {
+      try {
+        logAgentActivity(agentName, 'trying_model', { model, provider: 'gemini' });
+        const gemini = getGeminiClient();
+        const generation = trace.generation({ name: `${agentName}_generation`, model });
+
+        const response = await gemini.chat.completions.create({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a strict JSON-only responder for a job hunting system. Output ONLY valid JSON. No markdown, no code blocks, no explanations, no extra text — just the raw JSON object.' },
+            { role: 'user', content: filledPrompt },
+          ],
+          temperature: 0.1,
+          max_tokens: 8000,
+        });
+
+        const content = response.choices[0].message.content.trim();
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch (e) {
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+          else throw new Error(`Gemini JSON parse failed: ${content.substring(0, 200)}`);
+        }
+
+        generation.end({
+          output: parsed,
+          usage: { inputTokens: response.usage?.prompt_tokens || 0, outputTokens: response.usage?.completion_tokens || 0 },
+        });
+        trace.end();
+
+        logAgentActivity(agentName, 'prompt_completed', { success: true, model, provider: 'gemini' });
+        return parsed;
+
+      } catch (err) {
+        logAgentActivity(agentName, 'gemini_model_failed', { model, error: err.message });
+        console.warn(`[LLM] Gemini ${model} failed: ${err.message?.substring(0, 60)}`);
+        if (isFallbackError(err)) continue;
+        throw err;
+      }
+    }
+  }
+
+  // ── All above exhausted → try OpenAI as final fallback ───────────────────────
+  if (process.env.OPENAI_API_KEY) {
+    const OPENAI_MODELS = ['gpt-4o-mini', 'gpt-4o'];
+    logAgentActivity(agentName, 'switching_to_openai', { reason: 'all_groq_models_rate_limited' });
+    console.warn('[LLM] All Groq models rate-limited. Switching to OpenAI fallback...');
+
+    for (const model of OPENAI_MODELS) {
+      try {
+        logAgentActivity(agentName, 'trying_model', { model, provider: 'openai' });
+        const openai = getOpenAIClient();
+        const generation = trace.generation({ name: `${agentName}_generation`, model });
+
+        const response = await openai.chat.completions.create({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a strict JSON-only responder for a job hunting system. Output ONLY valid JSON. No markdown, no code blocks, no explanations, no extra text — just the raw JSON object.' },
+            { role: 'user', content: filledPrompt },
+          ],
+          temperature: 0.1,
+          max_tokens: 8000,
+          response_format: { type: 'json_object' },
+        });
+
+        const content = response.choices[0].message.content.trim();
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch (e) {
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+          else throw new Error(`OpenAI JSON parse failed: ${content.substring(0, 200)}`);
+        }
+
+        generation.end({
+          output: parsed,
+          usage: { inputTokens: response.usage?.prompt_tokens || 0, outputTokens: response.usage?.completion_tokens || 0 },
+        });
+        trace.end();
+
+        logAgentActivity(agentName, 'prompt_completed', { success: true, model, provider: 'openai' });
+        return parsed;
+
+      } catch (err) {
+        logAgentActivity(agentName, 'openai_model_failed', { model, error: err.message });
+        console.warn(`[LLM] OpenAI ${model} failed: ${err.message?.substring(0, 60)}`);
+        if (isFallbackError(err)) continue;
+        throw err;
+      }
+    }
+  }
+
+  // All providers exhausted
+  logAgentActivity(agentName, 'all_providers_exhausted', { error: lastError?.message });
+  throw new Error(`All LLM providers exhausted (Groq + DeepSeek + OpenRouter + MiniMax + Gemini + OpenAI). Please wait and try again. Last error: ${lastError?.message}`);
 };
 
 
@@ -209,6 +464,20 @@ const PrepChains = {
 const FTEChains = {
   extractEntity: (message, userId) =>
     runPrompt(FTE_PROMPTS.extractEntity, { message }, { agentName: 'fte', userId }),
+
+  /**
+   * Extract city, country, and ISO code from any location string
+   * Returns: { city, country, countryCode }
+   */
+  extractLocation: (location, userId) =>
+    runPrompt(FTE_PROMPTS.extractLocation, { location }, { agentName: 'jobSearch', userId }),
+
+  /**
+   * Brain: LLM reads state + history + message → decides action + reply
+   * Returns: { thinking, message, action, actionParams }
+   */
+  think: (context, userId) =>
+    runPrompt(FTE_PROMPTS.think, context, { agentName: 'fte', userId }),
 };
 
 module.exports = {

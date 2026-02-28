@@ -11,23 +11,25 @@ const Memory = require('../../models/Memory');
 const Approval = require('../../models/Approval');
 const Application = require('../../models/Application');
 const Job = require('../../models/Job');
-const { ResumeBuilderChains, ApplyChains, FTEChains, OrchestratorChains } = require('../../services/langchain/chains');
+const { ResumeBuilderChains, ApplyChains, FTEChains, OrchestratorChains, runPrompt } = require('../../services/langchain/chains');
+const { FTE_PROMPTS } = require('../../services/langchain/prompts');
 const { emailService } = require('../../services/emailService');
 const { logAgentActivity } = require('../../services/langchain/langfuse');
 const OrchestratorAgent = require('../orchestrator');
 
 // ─── States ───────────────────────────────────────────────────────────────────
 const STATES = {
-  WAITING_CV: 'waiting_cv',
-  CV_UPLOADED: 'cv_uploaded',
-  ASKING_LOCATION: 'asking_location',
-  SEARCHING: 'searching',
+  WAITING_CV:     'waiting_cv',
+  CV_UPLOADED:    'cv_uploaded',  // kept for backward compat
+  READY:          'ready',        // has CV, free to give any command
+  ASKING_LOCATION:'asking_location',
+  SEARCHING:      'searching',
   GENERATING_CVS: 'generating_cvs',
-  CV_REVIEW: 'cv_review',
+  CV_REVIEW:      'cv_review',
   FINDING_EMAILS: 'finding_emails',
-  EMAIL_REVIEW: 'email_review',
-  SENDING: 'sending',
-  DONE: 'done',
+  EMAIL_REVIEW:   'email_review',
+  SENDING:        'sending',
+  DONE:           'done',
 };
 
 const ASYNC_STATES = new Set([
@@ -41,6 +43,8 @@ const DEFAULT_STATE = {
   state: STATES.WAITING_CV,
   role: null,
   location: null,
+  lastRole: null,       // remembered for follow-up searches
+  lastLocation: null,   // remembered for follow-up searches
   jobs: [],
   cvResults: [],
   cvReviewApprovalId: null,
@@ -49,6 +53,7 @@ const DEFAULT_STATE = {
   sendResults: [],
   candidateProfile: null,
   cvFilePath: null,
+  history: [],          // conversation history — last 10 messages
 };
 
 // ─── Memory helpers ────────────────────────────────────────────────────────────
@@ -99,21 +104,48 @@ async function resetState(userId) {
   return { ...DEFAULT_STATE };
 }
 
+// ─── Known cities list (used by both intent detection and entity extraction) ──
+const KNOWN_CITIES = [
+  'karachi', 'lahore', 'islamabad', 'rawalpindi', 'faisalabad', 'multan',
+  'peshawar', 'quetta', 'sialkot', 'hyderabad', 'gujranwala', 'abbottabad',
+  'remote', 'anywhere', 'pakistan', 'dubai', 'riyadh', 'london', 'toronto',
+];
+
+// ─── Keyword-based intent detection (fast, no LLM, works for Roman Urdu) ─────
+function detectIntentFromKeywords(text) {
+  const t = text.toLowerCase();
+
+  // APPLY keywords (check first — "email bhejo" = apply, not job search)
+  if (/\b(apply|bhejo|bhej|send|emails?|application|submit|laga\s*do|bhejna|applications)\b/.test(t)) return 'APPLY';
+
+  // RESUME keywords
+  if (/\b(cv|resume|bana|generate|tayyar|create|banao|bio\s*data)\b/.test(t)) return 'RESUME';
+
+  // JOB_SEARCH keywords (jobs, dhundho, naukri, vacancy etc.)
+  if (/\b(job|jobs|dhundh|search|naukri|position|vacancy|opening|hire|hiring|rozgar|career)\b/.test(t)) return 'JOB_SEARCH';
+
+  // If message contains a KNOWN city → likely "Role City" pattern → JOB_SEARCH
+  // Use strict city matching to avoid false positives ("hello", "kya hal hai")
+  if (text.trim().length < 80 && extractKnownCity(text)) return 'JOB_SEARCH';
+
+  return null; // Let LLM decide
+}
+
+// ─── Extract only KNOWN cities (strict — no fallback to arbitrary text) ──────
+function extractKnownCity(text) {
+  const lower = text.toLowerCase();
+  for (const city of KNOWN_CITIES) {
+    if (lower.includes(city)) return city.charAt(0).toUpperCase() + city.slice(1);
+  }
+  return null;
+}
+
 // ─── Simple entity extraction (no LLM needed for location) ───────────────────
 function extractLocationFromText(text) {
-  // Common Pakistani cities + Remote
-  const cities = [
-    'karachi', 'lahore', 'islamabad', 'rawalpindi', 'faisalabad', 'multan',
-    'peshawar', 'quetta', 'sialkot', 'hyderabad', 'gujranwala', 'abbottabad',
-    'remote', 'anywhere', 'pakistan',
-  ];
-  const lower = text.toLowerCase();
-  for (const city of cities) {
-    if (lower.includes(city)) {
-      return city.charAt(0).toUpperCase() + city.slice(1);
-    }
-  }
-  // Fallback: use entire message as location if short
+  // Try known cities first
+  const known = extractKnownCity(text);
+  if (known) return known;
+  // Fallback: use entire message as location if short (for ASKING_LOCATION state)
   const trimmed = text.trim();
   if (trimmed.length > 0 && trimmed.length < 30) return trimmed;
   return null;
@@ -156,73 +188,274 @@ async function getHistoryList(userId) {
 class FTEAgent {
 
   /**
-   * Main chat entry point
+   * Main chat entry point — intent-based routing (Phase 1)
+   * User can type anything freely; system figures out what to do.
    * Returns: { botMessage, state, data? }
    */
   async chat(userId, message, uploadedFile = null) {
     const fteState = await getState(userId);
 
-    // Handle /reset command from any state
+    // ── /reset works from any state ─────────────────────────────────────────
     if (message && message.trim().toLowerCase() === '/reset') {
       const fresh = await resetState(userId);
       return {
-        botMessage: 'Reset ho gaya! Dobara shuru karte hain. Apni CV upload karein.',
+        botMessage: 'Reset ho gaya! Dobara shuru karte hain.\n\nApni **CV (PDF)** upload karein ya kuch bhi poochein.',
         state: fresh.state,
       };
     }
 
-    switch (fteState.state) {
+    // ── Async ops in progress → just inform ─────────────────────────────────
+    if (ASYNC_STATES.has(fteState.state)) {
+      const msgs = {
+        searching:      'Jobs dhundh raha hoon, thoda ruko... _(polling chal raha hai)_',
+        generating_cvs: 'Tailored CVs bana raha hoon, thoda ruko...',
+        finding_emails: 'HR emails dhundh raha hoon aur drafts bana raha hoon...',
+        sending:        'Emails bhej raha hoon...',
+      };
+      return { botMessage: msgs[fteState.state] || 'Kaam ho raha hai...', state: fteState.state };
+    }
 
-      case STATES.WAITING_CV:
-        if (uploadedFile) {
-          return await this.handleCVUpload(userId, uploadedFile);
-        }
+    // ── New CV upload → always accept ────────────────────────────────────────
+    if (uploadedFile) {
+      return await this.handleCVUpload(userId, uploadedFile);
+    }
+
+    // ── Pending HITL approvals → remind ─────────────────────────────────────
+    if (fteState.state === STATES.CV_REVIEW) {
+      return {
+        botMessage: 'Tailored CVs ready hain! Cards dekh kar **Approve** ya **Reject** karein.',
+        state: fteState.state,
+        data: { cvResults: fteState.cvResults, cvReviewApprovalId: fteState.cvReviewApprovalId },
+      };
+    }
+    if (fteState.state === STATES.EMAIL_REVIEW) {
+      return {
+        botMessage: 'Email drafts ready hain! Review kar ke **Send All** press karein.',
+        state: fteState.state,
+        data: { emailDrafts: fteState.emailDrafts, emailReviewApprovalId: fteState.emailReviewApprovalId },
+      };
+    }
+
+    // ── No CV yet → welcome + ask ────────────────────────────────────────────
+    // ── Empty message ────────────────────────────────────────────────────────
+    if (!message || message.trim().length === 0) {
+      if (!fteState.candidateProfile) {
         return {
-          botMessage: 'Assalam o Alaikum! Main aapka Digital FTE hoon.\n\nMain aapke liye jobs dhundhonga, tailored CVs banaunga, aur automatically HR ko applications bhejunga.\n\nShuru karne ke liye — pehle apni **CV (PDF)** upload karein.',
+          botMessage: `Assalam o Alaikum! Main aapka **Digital FTE** hoon 🤖\n\nMain aapke liye:\n• **Jobs dhundhonga** (Google Jobs via SerpAPI)\n• **Har job ke liye tailored CV** banaunga (ATS score ke saath)\n• **HR ko automatically email** kar dunga\n\nShuru karne ke liye apni **CV (PDF)** upload karein.`,
           state: STATES.WAITING_CV,
         };
+      }
+      return this.readyMessage(fteState);
+    }
 
-      case STATES.CV_UPLOADED:
-        if (uploadedFile) {
-          // User uploaded a new CV — re-parse it
-          return await this.handleCVUpload(userId, uploadedFile);
-        }
-        return await this.handleRoleCapture(userId, message, fteState);
+    const text = message.trim();
 
-      case STATES.ASKING_LOCATION:
-        if (uploadedFile) {
-          return await this.handleCVUpload(userId, uploadedFile);
-        }
-        return await this.handleLocationCapture(userId, message, fteState);
+    // ── Save user message to history ─────────────────────────────────────────
+    await this.addToHistory(userId, fteState, 'user', text);
 
-      case STATES.CV_REVIEW:
+    // ── LLM Brain: one call decides reply + action ────────────────────────────
+    return await this.thinkAndAct(userId, text, fteState);
+  }
+
+  /** Ready state welcome — shows what the user can do */
+  readyMessage(fteState) {
+    const name = fteState.candidateProfile?.contactInfo?.name || 'aap';
+    const parts = [];
+    if (fteState.jobs?.length)        parts.push(`• **Jobs mili hain:** ${fteState.jobs.length}`);
+    if (fteState.cvResults?.length)   parts.push(`• **CVs bani hain:** ${fteState.cvResults.length}`);
+    if (fteState.emailDrafts?.length) parts.push(`• **Email drafts:** ${fteState.emailDrafts.length}`);
+    const summary = parts.length ? '\n\n**Pipeline status:**\n' + parts.join('\n') : '';
+    return {
+      botMessage: `CV mil chuki hai, **${name}**! Kya karna hai? 🤖${summary}\n\n**Commands:**\n• _"Software Engineer Karachi"_ → jobs search\n• _"CVs banao"_ → tailored CVs generate\n• _"Apply karo"_ → emails bhejo\n• _"/reset"_ → sab clear karo`,
+      state: fteState.state || STATES.READY,
+    };
+  }
+
+  /**
+   * Brain method: LLM reads full context → decides reply + action
+   * Replaces: keyword detection + intent detection + handleGeneralChat
+   */
+  async thinkAndAct(userId, text, fteState) {
+    // Build context for LLM
+    const context = {
+      hasCv:         fteState.candidateProfile ? 'Yes' : 'No',
+      candidateName: fteState.candidateProfile?.contactInfo?.name || 'Unknown',
+      jobCount:      fteState.jobs?.length || 0,
+      role:          fteState.lastRole || fteState.role || 'none',
+      location:      fteState.lastLocation || fteState.location || 'none',
+      cvCount:       fteState.cvResults?.filter(r => r.cv)?.length || 0,
+      emailCount:    fteState.emailDrafts?.filter(r => !r.error)?.length || 0,
+      history:       (fteState.history || []).slice(-6)
+                       .map(h => `${h.role === 'user' ? 'User' : 'Bot'}: ${h.content}`)
+                       .join('\n') || '(no history)',
+      message:       text,
+    };
+
+    let brain;
+    try {
+      brain = await FTEChains.think(context, userId);
+      logAgentActivity('fte', 'brain_result', {
+        thinking: brain.thinking,
+        action: brain.action,
+        actionParams: brain.actionParams,
+      });
+    } catch (err) {
+      logAgentActivity('fte', 'brain_error', { error: err.message });
+      // Fallback: safe generic reply
+      return {
+        botMessage: 'Kya karna chahte hain?\n• _"Software Engineer Karachi"_ → jobs\n• _"CVs banao"_ → tailored CVs\n• _"Apply karo"_ → emails\n• _"/reset"_ → reset',
+        state: fteState.state || STATES.READY,
+      };
+    }
+
+    const reply = brain.message || 'Samajh nahi aaya, dobara likhein.';
+    const action = brain.action || 'none';
+
+    // ── Execute the action the LLM chose ─────────────────────────────────────
+    if (action === 'search_jobs') {
+      const role     = brain.actionParams?.role     || fteState.lastRole;
+      const location = brain.actionParams?.location || fteState.lastLocation;
+
+      if (!role || !location) {
+        // LLM said search but params missing — ask user
+        const needRole = !role;
+        await this.addToHistory(userId, await getState(userId), 'bot', reply);
         return {
-          botMessage: 'Tailored CVs ready hain! Upar diye cards dekh kar **Approve** ya **Reject** karein.',
+          botMessage: reply || (needRole
+            ? 'Kaunsi role ke liye jobs chahiye?'
+            : 'Kaunse city mein job chahiye?'),
           state: fteState.state,
-          data: { cvResults: fteState.cvResults, cvReviewApprovalId: fteState.cvReviewApprovalId },
         };
+      }
 
-      case STATES.EMAIL_REVIEW:
+      await setState(userId, {
+        state: STATES.SEARCHING, role, location,
+        lastRole: role, lastLocation: location,
+        jobs: [], cvResults: [], emailDrafts: [], sendResults: [],
+      });
+      this.runPipelineAsync(userId).catch(err => {
+        console.error('[FTE] Pipeline crashed:', err);
+        setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
+      });
+      await this.addToHistory(userId, await getState(userId), 'bot', reply);
+      return { botMessage: reply, state: STATES.SEARCHING };
+    }
+
+    if (action === 'generate_cvs') {
+      if (!fteState.jobs?.length) {
+        await this.addToHistory(userId, await getState(userId), 'bot', reply);
+        return { botMessage: reply, state: fteState.state };
+      }
+      await setState(userId, { state: STATES.GENERATING_CVS, cvResults: [] });
+      this.runCVGenerationAsync(userId).catch(err => {
+        setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
+      });
+      await this.addToHistory(userId, await getState(userId), 'bot', reply);
+      return { botMessage: reply, state: STATES.GENERATING_CVS };
+    }
+
+    if (action === 'find_emails') {
+      if (fteState.emailDrafts?.length) {
+        await this.addToHistory(userId, await getState(userId), 'bot', reply);
         return {
-          botMessage: 'Email drafts ready hain! Upar diye cards dekh kar edit karein ya seedha **Send All** press karein.',
-          state: fteState.state,
+          botMessage: reply,
+          state: STATES.EMAIL_REVIEW,
           data: { emailDrafts: fteState.emailDrafts, emailReviewApprovalId: fteState.emailReviewApprovalId },
         };
-
-      case STATES.DONE:
-        return {
-          botMessage: `Sab kuch ho gaya! ${fteState.sendResults?.filter(r => r.success).length || 0} companies ko applications bhej di gayi hain.\n\nDobara shuru karne ke liye **/reset** likhein.`,
-          state: STATES.DONE,
-          data: { sendResults: fteState.sendResults },
-        };
-
-      default:
-        // Async states: SEARCHING, GENERATING_CVS, FINDING_EMAILS, SENDING
-        return {
-          botMessage: 'Kaam ho raha hai, thoda sabr karein...',
-          state: fteState.state,
-        };
+      }
+      if (!fteState.cvResults?.length) {
+        await this.addToHistory(userId, await getState(userId), 'bot', reply);
+        return { botMessage: reply, state: fteState.state };
+      }
+      await setState(userId, { state: STATES.FINDING_EMAILS });
+      this.findEmailsAsync(userId).catch(err => {
+        setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
+      });
+      await this.addToHistory(userId, await getState(userId), 'bot', reply);
+      return { botMessage: reply, state: STATES.FINDING_EMAILS };
     }
+
+    // action === 'none' — just reply
+    await this.addToHistory(userId, await getState(userId), 'bot', reply);
+    return { botMessage: reply, state: fteState.state || STATES.READY };
+  }
+
+  /** Add a message to conversation history (max 10 messages) */
+  async addToHistory(userId, fteState, role, content) {
+    const history = Array.isArray(fteState.history) ? fteState.history : [];
+    history.push({ role, content, ts: Date.now() });
+    // Keep last 10 messages only
+    if (history.length > 10) history.splice(0, history.length - 10);
+    await setState(userId, { history });
+  }
+
+  /**
+   * Run ONLY the CV generation step (STEP 2 of pipeline)
+   * Used when user says "CVs banao" and jobs already exist
+   */
+  async runCVGenerationAsync(userId) {
+    const fteState = await getState(userId);
+    const { jobs, candidateProfile } = fteState;
+
+    if (!jobs?.length) {
+      await setState(userId, { state: STATES.READY, error: 'Pehle jobs dhundhen' });
+      return;
+    }
+
+    logAgentActivity('fte', 'cv_generation_only', { jobCount: jobs.length });
+    const cvOrchestrator = new OrchestratorAgent(userId);
+    await cvOrchestrator.initialize(`fte_cv_only_${Date.now()}`);
+
+    const selectedJobs = jobs.slice(0, 5);
+    const cvResults = [];
+
+    for (let i = 0; i < selectedJobs.length; i++) {
+      const job = selectedJobs[i];
+      try {
+        const cvTaskResults = await cvOrchestrator.executeTasks([{
+          id: i + 1, agent: 'resumeBuilder', action: 'generate_cv',
+          originalCV: candidateProfile,
+          targetJob: {
+            title: job.title, company: job.company,
+            location: job.location,
+            description: (job.description || '').substring(0, 800),
+            requirements: job.requirements || [],
+          },
+        }]);
+
+        const cvData = cvTaskResults[i + 1]?.data;
+        const raw = cvData?.cv || cvData || {};
+        const sections = raw.sections || raw.cv?.sections || raw;
+        const skillsRaw = sections.skills || [];
+        const skillsFlat = Array.isArray(skillsRaw)
+          ? skillsRaw
+          : [...(skillsRaw.technical || []), ...(skillsRaw.soft || []), ...(skillsRaw.tools || [])];
+
+        cvResults.push({
+          jobId: job._id?.toString() || `job_${i}`,
+          job,
+          cv: { ...sections, skills: skillsFlat },
+          atsScore: raw.atsScore || cvData?.atsScore || { overall: 70 },
+          matchedKeywords: raw.matchedKeywords || [],
+          recommendations: raw.suggestions || [],
+        });
+      } catch (err) {
+        cvResults.push({ jobId: job._id?.toString() || `job_${i}`, job, cv: null, error: err.message });
+      }
+    }
+
+    // Create cv_review approval (reuse existing logic)
+    const Approval = require('../../models/Approval');
+    const approval = await Approval.createPending({
+      userId, approvalType: 'cv_review',
+      taskId: `fte_cv_only_${Date.now()}`, agentId: 'fte',
+      title: `Review ${cvResults.filter(r => r.cv).length} Tailored CVs`,
+      description: 'Review generated CVs before applying',
+      content: { original: { cvResults, pipelineType: 'fte' } },
+      metadata: { urgency: 'normal', autoExpire: false },
+    });
+
+    await setState(userId, { state: STATES.CV_REVIEW, cvResults, cvReviewApprovalId: approval.approvalId });
   }
 
   /**
@@ -250,7 +483,7 @@ class FTEAgent {
       const cvFilePath = file.path;
 
       await setState(userId, {
-        state: STATES.CV_UPLOADED,
+        state: STATES.READY,
         candidateProfile,
         cvFilePath,
       });
@@ -277,7 +510,7 @@ class FTEAgent {
 
       return {
         botMessage: `CV mil gayi! ✓ **${name}** — ${skillCount} skills detect hui hain.\n\nAb ek hi message mein batayein — **kaunsi role** aur **kaunse city** mein job chahiye?\n\n_(misaal: "Software Engineer Karachi" ya "Data Analyst in Lahore")_`,
-        state: STATES.CV_UPLOADED,
+        state: STATES.READY,
       };
     } catch (err) {
       logAgentActivity('fte', 'cv_upload_error', { error: err.message });
@@ -296,7 +529,7 @@ class FTEAgent {
     if (!message || message.trim().length === 0) {
       return {
         botMessage: 'Please role aur city batayein, jaise "Software Engineer Karachi".',
-        state: STATES.CV_UPLOADED,
+        state: STATES.READY,
       };
     }
 
@@ -342,7 +575,7 @@ class FTEAgent {
       this.runPipelineAsync(userId).catch(err => {
         logAgentActivity('fte', 'pipeline_error', { error: err.message });
         console.error('[FTE] Pipeline crashed:', err);
-        setState(userId, { state: STATES.CV_UPLOADED, error: err.message }).catch(console.error);
+        setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
       });
       return {
         botMessage: `Theek hai! **${role}** jobs **${location}** mein dhundh raha hoon... _(15-30 seconds lag sakte hain)_`,
@@ -416,7 +649,7 @@ class FTEAgent {
     } catch (err) {
       logAgentActivity('fte', 'search_error', { error: err.message });
       await setState(userId, {
-        state: STATES.CV_UPLOADED,
+        state: STATES.READY,
         jobs: [],
         error: `Job search fail: ${err.message}`,
       });
@@ -428,7 +661,7 @@ class FTEAgent {
 
     if (selectedJobs.length === 0) {
       await setState(userId, {
-        state: STATES.CV_UPLOADED,
+        state: STATES.READY,
         jobs: [],
         error: `"${fteState.role}" ke liye "${fteState.location}" mein koi job nahi mili. Role ya city badal kar dobara try karein.`,
       });

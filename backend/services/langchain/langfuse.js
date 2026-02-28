@@ -8,6 +8,11 @@ const { OpenAI } = require('openai');
 
 let langfuse = null;
 let groqClient = null;
+let openaiClient = null;
+let deepseekClient = null;
+let openrouterClient = null;
+let minimaxClient = null;
+let geminiClient = null;
 
 /**
  * Initialize LangFuse with credentials from environment
@@ -58,9 +63,106 @@ const getGroqClient = () => {
   return groqClient;
 };
 
-// Backward compatibility alias
-const getGeminiClient = getGroqClient;
-const getOpenAIClient = getGroqClient;
+/**
+ * Get or create real OpenAI client (api.openai.com)
+ * Used as final fallback when all Groq models are rate-limited
+ */
+const getOpenAIClient = () => {
+  if (openaiClient) return openaiClient;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY not configured in .env');
+  }
+
+  // No baseURL override — uses OpenAI's official API
+  openaiClient = new OpenAI({ apiKey });
+  return openaiClient;
+};
+
+/**
+ * Get or create DeepSeek client (OpenAI-compatible)
+ * Used as fallback after Groq, before OpenAI
+ */
+const getDeepSeekClient = () => {
+  if (deepseekClient) return deepseekClient;
+
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) {
+    throw new Error('DEEPSEEK_API_KEY not configured in .env');
+  }
+
+  deepseekClient = new OpenAI({
+    apiKey,
+    baseURL: 'https://api.deepseek.com',
+  });
+
+  return deepseekClient;
+};
+
+/**
+ * Get or create OpenRouter client (OpenAI-compatible, 100+ models)
+ * Used as fallback after DeepSeek, before OpenAI
+ */
+const getOpenRouterClient = () => {
+  if (openrouterClient) return openrouterClient;
+
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY not configured in .env');
+  }
+
+  openrouterClient = new OpenAI({
+    apiKey,
+    baseURL: 'https://openrouter.ai/api/v1',
+    defaultHeaders: {
+      'HTTP-Referer': 'https://job-hunter.local',
+      'X-Title': 'Job Hunter FTE',
+    },
+  });
+
+  return openrouterClient;
+};
+
+/**
+ * Get or create MiniMax client (OpenAI-compatible)
+ * Used as fallback after OpenRouter, before OpenAI
+ */
+const getMiniMaxClient = () => {
+  if (minimaxClient) return minimaxClient;
+
+  const apiKey = process.env.MINIMAX_API_KEY;
+  if (!apiKey) {
+    throw new Error('MINIMAX_API_KEY not configured in .env');
+  }
+
+  minimaxClient = new OpenAI({
+    apiKey,
+    baseURL: 'https://api.minimaxi.chat/v1',
+  });
+
+  return minimaxClient;
+};
+
+/**
+ * Get or create real Google Gemini client (OpenAI-compatible endpoint)
+ * Uses GEMINI_API_KEY from .env
+ */
+const getGeminiClient = () => {
+  if (geminiClient) return geminiClient;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY not configured in .env');
+  }
+
+  geminiClient = new OpenAI({
+    apiKey,
+    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+  });
+
+  return geminiClient;
+};
 
 /**
  * Create a new trace for agent execution
@@ -164,6 +266,9 @@ module.exports = {
   getOpenAIClient,
   getGeminiClient,
   getGroqClient,
+  getDeepSeekClient,
+  getOpenRouterClient,
+  getMiniMaxClient,
   createTrace,
   logAgentActivity,
   getTraceUrl,
