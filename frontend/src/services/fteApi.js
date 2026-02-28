@@ -45,4 +45,21 @@ export const fteApi = {
    * Reset and start over
    */
   reset: () => api.post('/fte/reset'),
+
+  /**
+   * Download the tailored PDF CV for a specific job
+   */
+  downloadCV: (jobId) => api.get(`/fte/cv/download/${jobId}`, { responseType: 'blob' }),
+
+  /**
+   * Chat with local Ollama LLM
+   * history: [{role:'user'|'bot', content:string}]
+   */
+  ollamaChat: (message, history = [], model = '') =>
+    api.post('/ollama/chat', { message, history, ...(model && { model }) }, { timeout: 120000 }),
+
+  /**
+   * Check Ollama status + available models
+   */
+  ollamaStatus: () => api.get('/ollama/status'),
 };

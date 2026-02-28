@@ -13,6 +13,7 @@ const Application = require('../../models/Application');
 const Job = require('../../models/Job');
 const { ResumeBuilderChains, ApplyChains, FTEChains, OrchestratorChains, PrepChains, runPrompt } = require('../../services/langchain/chains');
 const { FTE_PROMPTS } = require('../../services/langchain/prompts');
+const { generateCVPdfs } = require('../../services/cvPdfService');
 const { emailService } = require('../../services/emailService');
 const { logAgentActivity } = require('../../services/langchain/langfuse');
 const OrchestratorAgent = require('../orchestrator');
@@ -472,27 +473,30 @@ class FTEAgent {
       }
     }
 
+    // Generate tailored PDFs
+    const cvResultsWithPdf = await generateCVPdfs(cvResults, userId);
+
     // Create cv_review approval (reuse existing logic)
     const Approval = require('../../models/Approval');
     const approval = await Approval.createPending({
       userId, approvalType: 'cv_review',
       taskId: `fte_cv_only_${Date.now()}`, agentId: 'fte',
-      title: `Review ${cvResults.filter(r => r.cv).length} Tailored CVs`,
+      title: `Review ${cvResultsWithPdf.filter(r => r.cv).length} Tailored CVs`,
       description: 'Review generated CVs before applying',
-      content: { original: { cvResults, pipelineType: 'fte' } },
+      content: { original: { cvResults: cvResultsWithPdf, pipelineType: 'fte' } },
       metadata: { urgency: 'normal', autoExpire: false },
     });
 
-    await setState(userId, { state: STATES.CV_REVIEW, cvResults, cvReviewApprovalId: approval.approvalId });
+    await setState(userId, { state: STATES.CV_REVIEW, cvResults: cvResultsWithPdf, cvReviewApprovalId: approval.approvalId });
 
     // Save to conversation history
     const stateAfterCVGen = await getState(userId);
-    const validGenCVs = cvResults.filter(r => r.cv).length;
+    const validGenCVs = cvResultsWithPdf.filter(r => r.cv).length;
     await this.addToHistory(
       userId, stateAfterCVGen, 'bot',
       `${validGenCVs} tailored CV${validGenCVs !== 1 ? 's' : ''} are ready! Review and approve to continue.`,
       'cv_approval',
-      { cvResults, cvReviewApprovalId: approval.approvalId }
+      { cvResults: cvResultsWithPdf, cvReviewApprovalId: approval.approvalId }
     );
   }
 
@@ -786,6 +790,10 @@ class FTEAgent {
 
     logAgentActivity('fte', 'cvs_generated', { count: cvResults.length });
 
+    // ── STEP 2b: Generate tailored PDF for each CV ────────────────────────────
+    const cvResultsWithPdf = await generateCVPdfs(cvResults, userId);
+    logAgentActivity('fte', 'pdfs_generated', { count: cvResultsWithPdf.filter(r => r.hasPdf).length });
+
     // ── STEP 3: Create cv_review Approval ────────────────────────────────────
     const approval = await Approval.createPending({
       userId,
@@ -807,18 +815,18 @@ class FTEAgent {
 
     await setState(userId, {
       state: STATES.CV_REVIEW,
-      cvResults,
+      cvResults: cvResultsWithPdf,
       cvReviewApprovalId: approval.approvalId,
     });
 
     // Save to conversation history so reopened sessions show the CV cards
     const stateAfterCV = await getState(userId);
-    const validCVs = cvResults.filter(r => r.cv).length;
+    const validCVs = cvResultsWithPdf.filter(r => r.cv).length;
     await this.addToHistory(
       userId, stateAfterCV, 'bot',
       `${validCVs} tailored CV${validCVs !== 1 ? 's' : ''} are ready! Review and approve to continue.`,
       'cv_approval',
-      { cvResults, cvReviewApprovalId: approval.approvalId }
+      { cvResults: cvResultsWithPdf, cvReviewApprovalId: approval.approvalId }
     );
 
     logAgentActivity('fte', 'cv_review_ready', { approvalId: approval.approvalId });
@@ -929,7 +937,7 @@ class FTEAgent {
             hrEmail: null,
             subject: null,
             body: null,
-            cvPath: cvFilePath,
+            cvPath: cvResult.cvPdfPath || cvFilePath,
             atsScore: cvResult.atsScore,
             error: 'Could not find HR email for this company',
           });
@@ -963,7 +971,7 @@ class FTEAgent {
           emailVerifyResult, // 'deliverable' | 'risky' | 'unknown'
           subject: draft?.subject || `Application for ${job.title} — ${candidateName}`,
           body: draft?.body || draft?.emailBody || draft?.content || null,
-          cvPath: cvFilePath,
+          cvPath: cvResult.cvPdfPath || cvFilePath,  // use tailored PDF, fall back to original
           atsScore: cvResult.atsScore,
         });
       } catch (err) {
@@ -974,7 +982,7 @@ class FTEAgent {
           hrEmail: null,
           subject: null,
           body: null,
-          cvPath: cvFilePath,
+          cvPath: cvResult.cvPdfPath || cvFilePath,
           atsScore: cvResult.atsScore,
           error: `Draft error: ${err.message}`,
         });
@@ -1280,6 +1288,11 @@ class FTEAgent {
   getHistory(userId) { return getHistoryList(userId); }
   getHistorySession(userId, key) { return getHistorySession(userId, key); }
   resetUser(userId) { return resetState(userId); }
+  async getCVPdfPath(userId, jobId) {
+    const state = await getState(userId);
+    const result = (state.cvResults || []).find(r => r.jobId === jobId);
+    return result?.cvPdfPath || null;
+  }
 }
 
 const fteAgent = new FTEAgent();

@@ -8,7 +8,7 @@ import {
   Loader2, CheckCircle, XCircle, ChevronDown, ChevronUp,
   ExternalLink, Mail, FileText, Plus, X,
   Building2, MapPin, Clock, TrendingUp,
-  User, Key, Save, Edit3, Shield,
+  User, Key, Save, Edit3, Shield, Download,
 } from 'lucide-react';
 
 const ASYNC_STATES = new Set(['searching', 'generating_cvs', 'finding_emails', 'sending', 'preparing_interview']);
@@ -235,6 +235,39 @@ const STYLES = `
   .fte-history-banner-btn:hover { background: #fef9c3; }
   .fte-session-card-clickable { cursor: pointer; }
   .fte-session-card-clickable:hover { background: #e8f7ef; border-color: #c8e8d8; }
+
+  /* Mode toggle */
+  .fte-mode-toggle { display: flex; background: #f0faf5; border: 1px solid #c8e8d8; border-radius: 10px; padding: 3px; gap: 2px; }
+  .fte-mode-btn { padding: 5px 11px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.72rem; font-weight: 700; font-family: inherit; background: none; color: #4d9a6a; transition: all 0.2s; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .fte-mode-btn.active { background: #fff; color: #071a10; box-shadow: 0 1px 4px rgba(16,185,129,0.12); }
+  .fte-mode-btn:hover:not(.active) { color: #0d7a56; }
+
+  /* Ollama status dot */
+  .fte-ollama-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .fte-ollama-dot.online { background: #10b981; }
+  .fte-ollama-dot.offline { background: #ef4444; }
+  .fte-ollama-dot.checking { background: #f59e0b; animation: fteDotPulse 1s infinite; }
+
+  /* Ollama chat bubbles */
+  .fte-ollama-bot-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 18px; }
+  .fte-ollama-icon { width: 32px; height: 32px; flex-shrink: 0; background: #1e1b4b; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+  .fte-ollama-bot-bubble { background: #1e1b4b; border-radius: 16px 16px 16px 4px; padding: 12px 16px; max-width: 85%; color: #e2e8f0; font-size: 0.875rem; font-weight: 500; line-height: 1.65; box-shadow: 0 1px 6px rgba(99,102,241,0.12); }
+  .fte-ollama-bot-bubble .fte-text p { color: #e2e8f0; font-weight: 500; }
+  .fte-ollama-bot-bubble .fte-text strong { color: #fff; font-weight: 800; }
+
+  /* Ollama model selector */
+  .fte-model-select { background: #f7fdf9; border: 1px solid #c8e8d8; border-radius: 8px; padding: 5px 10px; font-size: 0.75rem; font-weight: 700; color: #071a10; outline: none; font-family: inherit; cursor: pointer; max-width: 180px; }
+  .fte-model-select:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.1); }
+  .fte-model-bar { display: flex; align-items: center; gap: 8px; padding: 6px 16px; background: #f5f3ff; border-bottom: 1px solid #e9d5ff; flex-shrink: 0; }
+  .fte-model-bar-label { font-size: 0.68rem; font-weight: 700; color: #5b21b6; }
+
+  /* Ollama empty state */
+  .fte-ollama-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 240px; text-align: center; padding: 40px 0; }
+  .fte-ollama-empty-icon { width: 64px; height: 64px; background: linear-gradient(135deg,#6366f1,#8b5cf6); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 6px 20px rgba(99,102,241,0.25); }
+  .fte-ollama-empty h2 { color: #1e1b4b; font-size: 1.3rem; font-weight: 800; margin: 0 0 6px; }
+  .fte-ollama-empty p { color: #4338ca; font-size: 0.85rem; font-weight: 500; max-width: 300px; margin: 0; }
+  .fte-ollama-offline-note { margin-top: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 8px 14px; font-size: 0.75rem; color: #dc2626; font-weight: 600; }
+  .fte-ollama-offline-note code { background: #fff0f0; border-radius: 4px; padding: 1px 5px; font-family: monospace; }
 `;
 
 function TypingDots() {
@@ -265,7 +298,23 @@ function ATSScore({score}) {
 
 function CVApprovalCards({cvResults,approvalId,onApprove,onReject,loading,readOnly}) {
   const [expanded,setExpanded]=useState(null);
+  const [downloading,setDownloading]=useState(null);
   const valid=cvResults.filter(r=>!r.error);
+
+  const handleDownload=async(result)=>{
+    if(downloading||!result.hasPdf) return;
+    setDownloading(result.jobId);
+    try{
+      const res=await fteApi.downloadCV(result.jobId);
+      const url=URL.createObjectURL(new Blob([res.data],{type:'application/pdf'}));
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=`CV_${result.job?.company||'tailored'}_${result.job?.title||'cv'}.pdf`.replace(/[^a-z0-9._-]/gi,'_');
+      a.click();
+      URL.revokeObjectURL(url);
+    }catch{toast.error('Download failed — please try again.');}
+    finally{setDownloading(null);}
+  };
   return <div style={{width:'100%'}}>
     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}><FileText style={{width:15,height:15,color:'#8b5cf6'}}/><p className="fte-approve-label">{valid.length} tailored CV{valid.length!==1?'s':''} {readOnly?'generated':'ready'}</p></div>
     <div style={{marginBottom:12}}>{cvResults.map((result,idx)=>{
@@ -289,6 +338,9 @@ function CVApprovalCards({cvResults,approvalId,onApprove,onReject,loading,readOn
             {cv.skills?.length>0&&<div style={{marginBottom:10}}><p className="fte-section-label">Key Skills</p><div style={{display:'flex',flexWrap:'wrap',gap:5}}>{(Array.isArray(cv.skills)?cv.skills:[]).slice(0,12).map((s,i)=><span key={i} className="fte-skill-chip">{typeof s==='string'?s:s.name||String(s)}</span>)}</div></div>}
             {cv.experience?.length>0&&<div style={{marginBottom:10}}><p className="fte-section-label">Experience</p>{cv.experience.slice(0,2).map((e,i)=><div key={i} className="fte-exp-item"><p className="fte-exp-title">{e.role||e.title||e.position} @ {e.company||e.organization}</p><p className="fte-exp-date">{e.duration||e.period||e.dates||e.date}</p></div>)}</div>}
             {result.recommendations?.length>0&&<div><p className="fte-section-label">Improvements</p>{result.recommendations.slice(0,3).map((rec,i)=><div key={i} className="fte-rec-item"><TrendingUp style={{width:11,height:11,color:'#d97706',flexShrink:0,marginTop:1}}/><span>{rec}</span></div>)}</div>}
+            {result.hasPdf&&<button onClick={()=>handleDownload(result)} disabled={!!downloading} style={{marginTop:10,display:'flex',alignItems:'center',gap:6,background:'#eff6ff',border:'1px solid #bfdbfe',color:'#1d4ed8',borderRadius:8,padding:'6px 14px',fontFamily:'inherit',fontSize:'0.78rem',fontWeight:700,cursor:'pointer',width:'fit-content'}}>
+              {downloading===result.jobId?<><Loader2 style={{width:13,height:13}} className="fte-spin"/>Downloading...</>:<><Download style={{width:13,height:13}}/>Download Tailored CV (PDF)</>}
+            </button>}
           </>}
         </div>}
       </div>;
@@ -606,6 +658,11 @@ function ProfilePanel({ open, onClose, user, onUpdateUser, onLogout }) {
 // ─── Main FTE Chat ─────────────────────────────────────────────────────────────
 export default function FTEChat() {
   const {user,logout,updateUser}=useAuth();
+
+  // ── Mode: 'fte' = Job Pipeline Agent | 'ollama' = Local LLM chat ──────────
+  const [mode,setMode]=useState('fte');
+
+  // ── FTE Agent state ────────────────────────────────────────────────────────
   const [messages,setMessages]=useState([]);
   const [currentState,setCurrentState]=useState('waiting_cv');
   const [input,setInput]=useState('');
@@ -614,12 +671,36 @@ export default function FTEChat() {
   const [approvalLoading,setApprovalLoading]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
   const [profileOpen,setProfileOpen]=useState(false);
-  const [viewingHistory,setViewingHistory]=useState(null); // { role, location, completedAt } or null
+  const [viewingHistory,setViewingHistory]=useState(null);
   const [historyMessages,setHistoryMessages]=useState([]);
+
+  // ── Ollama chat state ──────────────────────────────────────────────────────
+  const [ollamaMessages,setOllamaMessages]=useState([]);
+  const [ollamaSending,setOllamaSending]=useState(false);
+  const [ollamaOnline,setOllamaOnline]=useState(null); // null=checking, true=online, false=offline
+  const [ollamaModels,setOllamaModels]=useState([]);
+  const [ollamaSelectedModel,setOllamaSelectedModel]=useState('');
+
   const messagesEndRef=useRef(null);const fileInputRef=useRef(null);const pollingRef=useRef(null);const textareaRef=useRef(null);
 
-  useEffect(()=>{messagesEndRef.current?.scrollIntoView({behavior:'smooth'});},[messages]);
+  useEffect(()=>{messagesEndRef.current?.scrollIntoView({behavior:'smooth'});},[messages,ollamaMessages]);
   useEffect(()=>{if(textareaRef.current){textareaRef.current.style.height='auto';textareaRef.current.style.height=Math.min(textareaRef.current.scrollHeight,128)+'px';}},[input]);
+
+  // Check Ollama status + fetch available models when switching to ollama mode
+  useEffect(()=>{
+    if(mode!=='ollama')return;
+    setOllamaOnline(null);
+    fteApi.ollamaStatus().then(res=>{
+      const d=res.data;
+      setOllamaOnline(d.running);
+      if(d.running&&d.availableModels?.length){
+        setOllamaModels(d.availableModels);
+        // Auto-select: prefer activeModel if available, else first model
+        const preferred=d.availableModels.find(m=>m===d.activeModel)||d.availableModels[0];
+        setOllamaSelectedModel(prev=>prev&&d.availableModels.includes(prev)?prev:preferred);
+      }
+    }).catch(()=>setOllamaOnline(false));
+  },[mode]);
 
   const addBotMessage=useCallback((type,content,data=null)=>{setMessages(prev=>[...prev,{id:Date.now()+Math.random(),role:'bot',type,content,data,ts:new Date()}]);},[]);
   const addUserMessage=useCallback((text)=>{setMessages(prev=>[...prev,{id:Date.now()+Math.random(),role:'user',type:'text',content:text,ts:new Date()}]);},[]);
@@ -653,7 +734,24 @@ export default function FTEChat() {
     return()=>{if(pollingRef.current)clearInterval(pollingRef.current);};
   },[currentState,addBotMessage]);
 
+  const handleOllamaSend=async()=>{
+    const text=input.trim();
+    if(!text||ollamaSending)return;
+    setOllamaMessages(prev=>[...prev,{id:Date.now(),role:'user',content:text}]);
+    setInput('');
+    setOllamaSending(true);
+    try{
+      const history=ollamaMessages.slice(-20).map(m=>({role:m.role==='user'?'user':'assistant',content:m.content}));
+      const res=await fteApi.ollamaChat(text,history,ollamaSelectedModel);
+      setOllamaMessages(prev=>[...prev,{id:Date.now()+1,role:'bot',content:res.data.reply}]);
+    }catch(err){
+      const errMsg=err.response?.data?.error||err.message;
+      setOllamaMessages(prev=>[...prev,{id:Date.now()+1,role:'bot',content:`Error: ${errMsg}`}]);
+    }finally{setOllamaSending(false);}
+  };
+
   const handleSend=async(override)=>{
+    if(mode==='ollama'){handleOllamaSend();return;}
     const text=typeof override==='string'?override:input.trim();const file=cvFile;
     if(!text&&!file)return;if(sending)return;
     if(text)addUserMessage(text);if(file)addUserMessage(`Uploading: ${file.name}`);
@@ -706,9 +804,9 @@ export default function FTEChat() {
     }catch{toast.error('Reset failed');}
   },[viewingHistory,addBotMessage]);
 
-  const isDisabled=sending||ASYNC_STATES.has(currentState)||!!viewingHistory;
+  const isDisabled=mode==='ollama'?(ollamaSending||!!viewingHistory):(sending||ASYNC_STATES.has(currentState)||!!viewingHistory);
   const meta=STATE_META[currentState]||STATE_META.waiting_cv;
-  const isPulse=ASYNC_STATES.has(currentState);
+  const isPulse=mode==='fte'&&ASYNC_STATES.has(currentState);
 
   return <>
     <style>{STYLES}</style>
@@ -735,7 +833,14 @@ export default function FTEChat() {
           </div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <button className="fte-header-btn" onClick={handleNewChat}><Plus style={{width:13,height:13}}/>New Chat</button>
+          <div className="fte-mode-toggle">
+            <button className={`fte-mode-btn${mode==='fte'?' active':''}`} onClick={()=>setMode('fte')}>🤖 FTE Agent</button>
+            <button className={`fte-mode-btn${mode==='ollama'?' active':''}`} onClick={()=>setMode('ollama')}>
+              <span className={`fte-ollama-dot${ollamaOnline===true?' online':ollamaOnline===false?' offline':' checking'}`}/>
+              Llama3 Local
+            </button>
+          </div>
+          {mode==='fte'&&<button className="fte-header-btn" onClick={handleNewChat}><Plus style={{width:13,height:13}}/>New Chat</button>}
           <button
             className="fte-avatar-btn"
             onClick={()=>setProfileOpen(true)}
@@ -746,6 +851,19 @@ export default function FTEChat() {
         </div>
       </header>
 
+      {mode==='ollama'&&ollamaOnline&&ollamaModels.length>0&&(
+        <div className="fte-model-bar">
+          <span className="fte-model-bar-label">Model:</span>
+          <select
+            className="fte-model-select"
+            value={ollamaSelectedModel}
+            onChange={e=>setOllamaSelectedModel(e.target.value)}
+          >
+            {ollamaModels.map(m=><option key={m} value={m}>{m}</option>)}
+          </select>
+          <span style={{fontSize:'0.65rem',color:'#7c3aed',fontWeight:600,marginLeft:4}}>running locally</span>
+        </div>
+      )}
       {viewingHistory&&(
         <div className="fte-history-banner">
           <span className="fte-history-banner-text">📂 {viewingHistory.role||'Session'}{viewingHistory.location?` · ${viewingHistory.location}`:''}</span>
@@ -757,7 +875,28 @@ export default function FTEChat() {
       )}
       <div className="fte-messages">
         <div className="fte-messages-inner">
-          {viewingHistory?(
+          {mode==='ollama'?(
+            <>
+              {ollamaMessages.length===0&&(
+                <div className="fte-ollama-empty">
+                  <div className="fte-ollama-empty-icon"><Bot style={{width:32,height:32,color:'white'}}/></div>
+                  <h2>Llama3 Local</h2>
+                  <p>{ollamaOnline===false?'Ollama is not running on this machine':'Chat with your local Llama3 model — no internet needed'}</p>
+                  {ollamaOnline===false&&<div className="fte-ollama-offline-note">Run: <code>ollama serve</code> — then: <code>ollama pull llama3</code></div>}
+                  {ollamaOnline===null&&<p style={{marginTop:8,fontSize:'0.75rem',color:'#9ca3af'}}>Checking connection...</p>}
+                </div>
+              )}
+              {ollamaMessages.map((msg,idx)=>
+                msg.role==='user'
+                  ?<UserMessage key={idx}>{msg.content}</UserMessage>
+                  :<div key={idx} className="fte-ollama-bot-row">
+                    <div className="fte-ollama-icon"><Bot style={{width:16,height:16,color:'#818cf8'}}/></div>
+                    <div className="fte-ollama-bot-bubble"><BotText text={msg.content}/></div>
+                  </div>
+              )}
+              {ollamaSending&&<div className="fte-ollama-bot-row"><div className="fte-ollama-icon"><Bot style={{width:16,height:16,color:'#818cf8'}}/></div><div className="fte-ollama-bot-bubble"><TypingDots/></div></div>}
+            </>
+          ):viewingHistory?(
             historyMessages.length===0
               ?<div className="fte-empty"><div className="fte-empty-icon"><Bot style={{width:32,height:32,color:'white'}}/></div><h2>No messages</h2><p>This session has no conversation messages saved.</p></div>
               :historyMessages.map(msg=>{
@@ -793,12 +932,21 @@ export default function FTEChat() {
           {cvFile&&<div className="fte-cv-preview"><FileText style={{width:13,height:13,color:'#10b981',flexShrink:0}}/><span>{cvFile.name}</span><button onClick={()=>{setCvFile(null);if(fileInputRef.current)fileInputRef.current.value='';}} style={{background:'none',border:'none',cursor:'pointer',color:'#fca5a5',flexShrink:0,padding:0}}><X style={{width:12,height:12}}/></button></div>}
           <div className="fte-input-row">
             <input ref={fileInputRef} type="file" accept=".pdf" style={{display:'none'}} onChange={handleFileChange}/>
-            <button onClick={()=>fileInputRef.current?.click()} disabled={isDisabled} className={`fte-attach-btn ${currentState==='waiting_cv'?'pulse':'idle'}`}><Paperclip style={{width:16,height:16}}/></button>
+            {mode==='fte'&&<button onClick={()=>fileInputRef.current?.click()} disabled={isDisabled} className={`fte-attach-btn ${currentState==='waiting_cv'?'pulse':'idle'}`}><Paperclip style={{width:16,height:16}}/></button>}
             <textarea ref={textareaRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKeyDown} disabled={isDisabled} className="fte-textarea" rows={1}
-              placeholder={viewingHistory?'Viewing history — click "Back to current chat" to resume':currentState==='waiting_cv'?'CV upload karein ya yahan likhein...':currentState==='cv_uploaded'||currentState==='asking_location'?'Role aur city likhein — e.g. "Software Engineer Karachi"':currentState==='preparing_interview'?'Interview questions generate ho rahi hain...':ASYNC_STATES.has(currentState)?'Kaam ho raha hai, thodi der wait karein...':'Yahan likhein... (Enter = send, Shift+Enter = newline)'}/>
-            <button onClick={handleSend} disabled={isDisabled||(!input.trim()&&!cvFile)} className="fte-send-btn">{sending?<Loader2 style={{width:16,height:16}} className="fte-spin"/>:<Send style={{width:16,height:16}}/>}</button>
+              placeholder={
+                mode==='ollama'
+                  ?(ollamaOnline===false?'Ollama not running — start with "ollama serve"':ollamaSending?'Llama3 soch raha hai...':'Kuch bhi pucho Llama3 se... (Enter = send)')
+                  :viewingHistory?'Viewing history — click "Back to current chat" to resume'
+                  :currentState==='waiting_cv'?'CV upload karein ya yahan likhein...'
+                  :currentState==='cv_uploaded'||currentState==='asking_location'?'Role aur city likhein — e.g. "Software Engineer Karachi"'
+                  :currentState==='preparing_interview'?'Interview questions generate ho rahi hain...'
+                  :ASYNC_STATES.has(currentState)?'Kaam ho raha hai, thodi der wait karein...'
+                  :'Yahan likhein... (Enter = send, Shift+Enter = newline)'
+              }/>
+            <button onClick={handleSend} disabled={isDisabled||(!input.trim()&&(mode==='ollama'||!cvFile))} className="fte-send-btn">{(mode==='ollama'?ollamaSending:sending)?<Loader2 style={{width:16,height:16}} className="fte-spin"/>:<Send style={{width:16,height:16}}/>}</button>
           </div>
-          <p className="fte-input-hint">CV → Role + City → Jobs → CVs → Approve → Emails → Send</p>
+          <p className="fte-input-hint">{mode==='ollama'?'Llama3 runs locally — no data sent to cloud':'CV → Role + City → Jobs → CVs → Approve → Emails → Send'}</p>
         </div>
       </div>
     </div>

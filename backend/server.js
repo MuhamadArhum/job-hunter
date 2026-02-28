@@ -51,6 +51,7 @@ app.use('/api/test', require('./routes/test'));
 app.use('/api/orchestrator', require('./routes/orchestrator'));
 app.use('/api/pipeline', require('./routes/pipeline'));
 app.use('/api/fte', require('./routes/fte'));
+app.use('/api/ollama', require('./routes/ollama'));
 
 // File upload handling
 app.use('/uploads', express.static('uploads'));

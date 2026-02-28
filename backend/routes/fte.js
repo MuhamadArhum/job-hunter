@@ -168,6 +168,35 @@ router.get('/history/:key', authMiddleware, async (req, res) => {
 });
 
 /**
+ * GET /api/fte/cv/download/:jobId
+ * Download the tailored PDF CV for a specific job
+ */
+router.get('/cv/download/:jobId', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { jobId } = req.params;
+
+    const cvPdfPath = await fteAgent.getCVPdfPath(userId, jobId);
+
+    if (!cvPdfPath) {
+      return res.status(404).json({ success: false, error: 'Tailored CV PDF not found for this job.' });
+    }
+    if (!fs.existsSync(cvPdfPath)) {
+      return res.status(404).json({ success: false, error: 'CV PDF file no longer exists on disk.' });
+    }
+
+    // Extract a clean filename from the path
+    const baseName = path.basename(cvPdfPath);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${baseName}"`);
+    fs.createReadStream(cvPdfPath).pipe(res);
+  } catch (error) {
+    console.error('FTE cv download error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * POST /api/fte/reset
  * Reset FTE state to start over
  */
