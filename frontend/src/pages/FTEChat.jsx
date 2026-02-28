@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { fteApi } from '../services/fteApi';
+import { authAPI, userAPI } from '../services/api';
 import toast from 'react-hot-toast';
 import {
   Send, Paperclip, PanelLeft, LogOut, Bot,
   Loader2, CheckCircle, XCircle, ChevronDown, ChevronUp,
   ExternalLink, Mail, FileText, Plus, X,
   Building2, MapPin, Clock, TrendingUp,
+  User, Key, Save, Edit3, Shield,
 } from 'lucide-react';
 
 const ASYNC_STATES = new Set(['searching', 'generating_cvs', 'finding_emails', 'sending']);
@@ -181,6 +183,49 @@ const STYLES = `
 
   .fte-thinking { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e6f4ee; border-radius: 14px; padding: 10px 14px; width: fit-content; box-shadow: 0 1px 4px rgba(16,185,129,0.06); }
   .fte-thinking span { font-size: 0.8rem; font-weight: 600; color: #2a6048; }
+
+  /* User avatar button in header */
+  .fte-avatar-btn { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg,#10b981,#0d9488); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.72rem; font-weight: 800; font-family: inherit; box-shadow: 0 2px 8px rgba(16,185,129,0.25); transition: all 0.2s; flex-shrink: 0; }
+  .fte-avatar-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.35); }
+
+  /* Profile panel (slides from right) */
+  .fte-profile { position: fixed; top: 0; right: 0; height: 100%; width: 320px; background: #fff; border-left: 1px solid #e6f4ee; z-index: 30; display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.16,1,0.3,1); box-shadow: -4px 0 24px rgba(16,185,129,0.08); }
+  .fte-profile.open { transform: translateX(0); }
+  .fte-profile-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #e6f4ee; }
+  .fte-profile-title { color: #071a10; font-weight: 800; font-size: 0.875rem; }
+  .fte-profile-body { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 20px; scrollbar-width: thin; }
+
+  /* Avatar circle */
+  .fte-profile-avatar { width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(135deg,#10b981,#0d9488); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem; font-weight: 800; box-shadow: 0 4px 16px rgba(16,185,129,0.3); flex-shrink: 0; }
+  .fte-profile-name { color: #071a10; font-size: 1.05rem; font-weight: 800; margin: 0; }
+  .fte-profile-email { color: #3a7055; font-size: 0.78rem; font-weight: 600; margin: 2px 0 0; }
+
+  /* Section */
+  .fte-profile-section { border: 1px solid #e6f4ee; border-radius: 14px; overflow: hidden; }
+  .fte-profile-section-hdr { display: flex; align-items: center; gap: 8px; padding: 12px 14px; background: #f7fdf9; border-bottom: 1px solid #e6f4ee; }
+  .fte-profile-section-title { color: #071a10; font-weight: 800; font-size: 0.8rem; }
+  .fte-profile-section-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* Profile input */
+  .fte-profile-label { display: block; font-size: 0.65rem; font-weight: 800; color: #4d9a6a; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
+  .fte-profile-input { width: 100%; background: #f7fdf9; border: 1px solid #c8e8d8; border-radius: 10px; padding: 9px 12px; font-size: 0.82rem; font-weight: 500; color: #071a10; outline: none; font-family: inherit; transition: all 0.2s; }
+  .fte-profile-input::placeholder { color: #7dba9a; font-weight: 400; }
+  .fte-profile-input:focus { border-color: #10b981; background: #fff; box-shadow: 0 0 0 3px rgba(16,185,129,0.1); }
+  .fte-profile-input:disabled { background: #f0faf5; color: #4d9a6a; cursor: default; }
+
+  /* Profile save btn */
+  .fte-profile-save { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; background: linear-gradient(135deg,#10b981,#0d9488); color: white; font-weight: 800; font-size: 0.82rem; border: none; border-radius: 10px; padding: 10px; cursor: pointer; font-family: inherit; box-shadow: 0 2px 10px rgba(16,185,129,0.22); transition: all 0.2s; }
+  .fte-profile-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(16,185,129,0.32); }
+  .fte-profile-save:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* Logout */
+  .fte-profile-logout { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; background: #fff; color: #dc2626; font-weight: 800; font-size: 0.82rem; border: 1px solid #fecaca; border-radius: 10px; padding: 10px; cursor: pointer; font-family: inherit; transition: all 0.2s; }
+  .fte-profile-logout:hover { background: #fef2f2; }
+
+  /* Password toggle */
+  .fte-pw-wrap { position: relative; }
+  .fte-pw-eye { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #7dba9a; padding: 0; }
+  .fte-pw-eye:hover { color: #10b981; }
 `;
 
 function TypingDots() {
@@ -318,8 +363,179 @@ function HistorySidebar({open,onClose}) {
   </>;
 }
 
+// ─── Profile Panel ────────────────────────────────────────────────────────────
+function ProfilePanel({ open, onClose, user, onUpdateUser, onLogout }) {
+  const [name, setName]       = useState(user?.name || '');
+  const [nameLoading, setNameLoading] = useState(false);
+
+  const [curPw, setCurPw]     = useState('');
+  const [newPw, setNewPw]     = useState('');
+  const [showCur, setShowCur] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+
+  // Sync name when user changes
+  useEffect(() => { setName(user?.name || ''); }, [user]);
+
+  const initials = (user?.name || user?.email || 'U')
+    .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
+  const saveName = async () => {
+    if (!name.trim() || name.trim() === user?.name) return;
+    setNameLoading(true);
+    try {
+      const res = await userAPI.updateProfile({ name: name.trim() });
+      onUpdateUser(res.data.user);
+      toast.success('Name updated!');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Update failed');
+    } finally { setNameLoading(false); }
+  };
+
+  const savePw = async () => {
+    if (!curPw || !newPw) { toast.error('Dono fields fill karein'); return; }
+    if (newPw.length < 6) { toast.error('New password min 6 characters'); return; }
+    setPwLoading(true);
+    try {
+      await authAPI.updatePassword({ currentPassword: curPw, newPassword: newPw });
+      toast.success('Password update ho gaya!');
+      setCurPw(''); setNewPw('');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Password update failed');
+    } finally { setPwLoading(false); }
+  };
+
+  const memberSince = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })
+    : null;
+
+  return <>
+    {open && <div className="fte-backdrop" onClick={onClose} />}
+    <div className={`fte-profile${open ? ' open' : ''}`}>
+      {/* Header */}
+      <div className="fte-profile-header">
+        <div className="fte-profile-title">My Profile</div>
+        <button className="fte-icon-btn" onClick={onClose}><X style={{width:15,height:15}}/></button>
+      </div>
+
+      <div className="fte-profile-body">
+        {/* Avatar + info */}
+        <div style={{display:'flex',alignItems:'center',gap:14}}>
+          <div className="fte-profile-avatar">{initials}</div>
+          <div>
+            <p className="fte-profile-name">{user?.name || '—'}</p>
+            <p className="fte-profile-email">{user?.email}</p>
+            {memberSince && (
+              <p style={{fontSize:'0.68rem',color:'#7dba9a',fontWeight:600,marginTop:3}}>
+                Member since {memberSince}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Edit Name */}
+        <div className="fte-profile-section">
+          <div className="fte-profile-section-hdr">
+            <User style={{width:14,height:14,color:'#10b981'}}/>
+            <span className="fte-profile-section-title">Personal Info</span>
+          </div>
+          <div className="fte-profile-section-body">
+            <div>
+              <label className="fte-profile-label">Full Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Apna naam likhein"
+                className="fte-profile-input"
+              />
+            </div>
+            <div>
+              <label className="fte-profile-label">Email</label>
+              <input
+                type="email"
+                value={user?.email || ''}
+                disabled
+                className="fte-profile-input"
+              />
+            </div>
+            <button
+              onClick={saveName}
+              disabled={nameLoading || !name.trim() || name.trim() === user?.name}
+              className="fte-profile-save"
+            >
+              {nameLoading
+                ? <><Loader2 style={{width:13,height:13}} className="fte-spin"/>Saving...</>
+                : <><Save style={{width:13,height:13}}/>Save Name</>
+              }
+            </button>
+          </div>
+        </div>
+
+        {/* Change Password */}
+        <div className="fte-profile-section">
+          <div className="fte-profile-section-hdr">
+            <Key style={{width:14,height:14,color:'#10b981'}}/>
+            <span className="fte-profile-section-title">Change Password</span>
+          </div>
+          <div className="fte-profile-section-body">
+            <div>
+              <label className="fte-profile-label">Current Password</label>
+              <div className="fte-pw-wrap">
+                <input
+                  type={showCur ? 'text' : 'password'}
+                  value={curPw}
+                  onChange={e => setCurPw(e.target.value)}
+                  placeholder="Purana password"
+                  className="fte-profile-input"
+                  style={{paddingRight:36}}
+                />
+                <button type="button" className="fte-pw-eye" onClick={() => setShowCur(s => !s)}>
+                  <Shield style={{width:13,height:13}}/>
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="fte-profile-label">New Password</label>
+              <div className="fte-pw-wrap">
+                <input
+                  type={showNew ? 'text' : 'password'}
+                  value={newPw}
+                  onChange={e => setNewPw(e.target.value)}
+                  placeholder="Naya password (min 6)"
+                  className="fte-profile-input"
+                  style={{paddingRight:36}}
+                />
+                <button type="button" className="fte-pw-eye" onClick={() => setShowNew(s => !s)}>
+                  <Shield style={{width:13,height:13}}/>
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={savePw}
+              disabled={pwLoading || !curPw || !newPw}
+              className="fte-profile-save"
+            >
+              {pwLoading
+                ? <><Loader2 style={{width:13,height:13}} className="fte-spin"/>Updating...</>
+                : <><Key style={{width:13,height:13}}/>Update Password</>
+              }
+            </button>
+          </div>
+        </div>
+
+        {/* Logout */}
+        <button className="fte-profile-logout" onClick={onLogout}>
+          <LogOut style={{width:14,height:14}}/> Logout
+        </button>
+      </div>
+    </div>
+  </>;
+}
+
+// ─── Main FTE Chat ─────────────────────────────────────────────────────────────
 export default function FTEChat() {
-  const {user,logout}=useAuth();
+  const {user,logout,updateUser}=useAuth();
   const [messages,setMessages]=useState([]);
   const [currentState,setCurrentState]=useState('waiting_cv');
   const [input,setInput]=useState('');
@@ -327,6 +543,7 @@ export default function FTEChat() {
   const [sending,setSending]=useState(false);
   const [approvalLoading,setApprovalLoading]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
+  const [profileOpen,setProfileOpen]=useState(false);
   const messagesEndRef=useRef(null);const fileInputRef=useRef(null);const pollingRef=useRef(null);const textareaRef=useRef(null);
 
   useEffect(()=>{messagesEndRef.current?.scrollIntoView({behavior:'smooth'});},[messages]);
@@ -392,6 +609,13 @@ export default function FTEChat() {
     <style>{STYLES}</style>
     <div className="fte-root">
       <HistorySidebar open={historyOpen} onClose={()=>setHistoryOpen(false)}/>
+      <ProfilePanel
+        open={profileOpen}
+        onClose={()=>setProfileOpen(false)}
+        user={user}
+        onUpdateUser={updateUser}
+        onLogout={logout}
+      />
 
       <header className="fte-header">
         <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -407,8 +631,13 @@ export default function FTEChat() {
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           <button className="fte-header-btn" onClick={handleNewChat}><Plus style={{width:13,height:13}}/>New Chat</button>
-          <span style={{fontSize:'0.72rem',color:'#3a7055',fontWeight:600,maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.name||user?.email}</span>
-          <button className="fte-icon-btn logout" onClick={logout}><LogOut style={{width:14,height:14}}/></button>
+          <button
+            className="fte-avatar-btn"
+            onClick={()=>setProfileOpen(true)}
+            title={user?.name||user?.email}
+          >
+            {(user?.name||user?.email||'U').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}
+          </button>
         </div>
       </header>
 

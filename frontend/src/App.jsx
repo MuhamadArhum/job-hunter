@@ -6,22 +6,12 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import Jobs from './pages/Jobs';
-import JobDetails from './pages/JobDetails';
-import Applications from './pages/Applications';
-import ApplicationReview from './pages/ApplicationReview';
-import Profile from './pages/Profile';
-import Orchestrator from './pages/Orchestrator';
 import FTEChat from './pages/FTEChat';
 import './index.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
+    queries: { retry: 1, refetchOnWindowFocus: false },
   },
 });
 
@@ -29,34 +19,22 @@ const queryClient = new QueryClient({
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to="/chat" replace />;
   return children;
 }
 
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-      
-      {/* Protected Routes with Navbar */}
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/jobs" element={<ProtectedRoute><Jobs /></ProtectedRoute>} />
-      <Route path="/jobs/:id" element={<ProtectedRoute><JobDetails /></ProtectedRoute>} />
-      <Route path="/applications" element={<ProtectedRoute><Applications /></ProtectedRoute>} />
-      <Route path="/applications/:id/review" element={<ProtectedRoute><ApplicationReview /></ProtectedRoute>} />
-      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-      <Route path="/orchestrator" element={<ProtectedRoute><Orchestrator /></ProtectedRoute>} />
-      <Route path="/chat" element={<ProtectedRoute><FTEChat /></ProtectedRoute>} />
-      
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/chat"     element={<ProtectedRoute><FTEChat /></ProtectedRoute>} />
+      <Route path="*"         element={<Navigate to="/chat" replace />} />
     </Routes>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -66,7 +44,18 @@ function App() {
             position="top-right"
             toastOptions={{
               duration: 4000,
-              style: { background: '#363636', color: '#fff' },
+              style: {
+                background: '#fff',
+                color: '#071a10',
+                border: '1px solid #c8e8d8',
+                boxShadow: '0 4px 16px rgba(16,185,129,0.12)',
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                borderRadius: '12px',
+              },
+              success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
+              error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
             }}
           />
         </Router>
@@ -74,5 +63,3 @@ function App() {
     </QueryClientProvider>
   );
 }
-
-export default App;
