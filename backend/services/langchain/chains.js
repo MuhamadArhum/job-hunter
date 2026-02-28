@@ -442,6 +442,9 @@ const ApplyChains = {
 
   draftEmail: (candidateInfo, targetJob, companyName, hrEmail, userId) =>
     runPrompt(APPLY_PROMPTS.emailDrafting, { candidateInfo, targetJob, companyName, hrEmail }, { agentName: 'apply', userId }),
+
+  draftFollowUp: (candidateName, position, company, applicationDate, userId) =>
+    runPrompt(APPLY_PROMPTS.draftFollowUp, { candidateName, position, company, applicationDate }, { agentName: 'apply', userId }),
 };
 
 /**

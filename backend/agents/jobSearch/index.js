@@ -151,12 +151,27 @@ class JobSearchAgent {
 
     let jobResults = [];
 
+    // Page 1
     try {
       const response = await getJson(primaryParams);
       jobResults = response.jobs_results || [];
-      logAgentActivity('jobSearch', 'serpapi_raw_results', { count: jobResults.length, method: 'location_param' });
+      logAgentActivity('jobSearch', 'serpapi_raw_results', { count: jobResults.length, method: 'page1' });
     } catch (err) {
       logAgentActivity('jobSearch', 'serpapi_primary_failed', { error: err.message });
+    }
+
+    // Page 2 — fetch only if page 1 returned results (avoids wasting API credits)
+    if (jobResults.length > 0) {
+      try {
+        const page2Params = { ...primaryParams, start: 10 };
+        const page2Response = await getJson(page2Params);
+        const page2Jobs = page2Response.jobs_results || [];
+        jobResults = [...jobResults, ...page2Jobs];
+        logAgentActivity('jobSearch', 'serpapi_raw_results', { count: page2Jobs.length, method: 'page2', total: jobResults.length });
+      } catch (err) {
+        // Page 2 failure is non-critical — continue with page 1 results
+        logAgentActivity('jobSearch', 'serpapi_page2_failed', { error: err.message });
+      }
     }
 
     // Fallback: embed location in query string (broader, works for any city)
@@ -174,6 +189,14 @@ class JobSearchAgent {
         const fallbackResponse = await getJson(fallbackParams);
         jobResults = fallbackResponse.jobs_results || [];
         logAgentActivity('jobSearch', 'serpapi_raw_results', { count: jobResults.length, method: 'query_fallback' });
+
+        // Page 2 of fallback
+        if (jobResults.length > 0) {
+          try {
+            const fallbackPage2 = await getJson({ ...fallbackParams, start: 10 });
+            jobResults = [...jobResults, ...(fallbackPage2.jobs_results || [])];
+          } catch { /* non-critical */ }
+        }
       } catch (err) {
         logAgentActivity('jobSearch', 'serpapi_fallback_failed', { error: err.message });
       }

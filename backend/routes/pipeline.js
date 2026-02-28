@@ -431,8 +431,8 @@ router.post('/approve-cvs', authMiddleware, async (req, res) => {
               null,
               userId
             );
-            const hrEmail = emailResult?.emails?.[0]?.email
-              || `hr@${(job.company || 'company').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)}.com`;
+            const sortedEmails = (emailResult?.emails || []).sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+            const hrEmail = sortedEmails[0]?.email || null;
 
             // Draft email
             const emailDraft = await ApplyChains.draftEmail(
@@ -448,7 +448,7 @@ router.post('/approve-cvs', authMiddleware, async (req, res) => {
               job,
               hrEmail,
               subject: emailDraft.subject || `Application for ${job.title} - ${pipeline.candidateProfile?.contactInfo?.name || 'Applicant'}`,
-              body: emailDraft.body || `Dear HR Team,\n\nI am interested in the ${job.title} position at ${job.company}.\n\nBest regards`,
+              body: emailDraft.body || null,
               cvPath: pipeline.cvFilePath,
               atsScore: cvResult.atsScore,
             });

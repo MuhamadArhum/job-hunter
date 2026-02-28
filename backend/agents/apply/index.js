@@ -13,39 +13,6 @@ const Approval = require('../../models/Approval');
 const { emailService } = require('../../services/emailService');
 
 class ApplyAgent {
-  constructor() {
-    this.emailTemplates = {
-      application: {
-        subject: 'Application for {{position}} - {{name}}',
-        body: `Dear {{greeting}},
-
-I am writing to express my strong interest in the {{position}} position at {{company}}. With my {{years}} years of experience in {{skills}}, I believe I would be a valuable addition to your team.
-
-{{highlights}}
-
-I am particularly drawn to {{company}} because {{company_interest}}. I am excited about the opportunity to contribute to your team and help drive {{company_goals}}.
-
-Thank you for considering my application. I look forward to the opportunity to discuss how my background and skills would benefit {{company}}.
-
-Best regards,
-{{name}}
-{{contact_info}}`,
-      },
-      followUp: {
-        subject: 'Follow-up: {{position}} Application - {{name}}',
-        body: `Dear {{greeting}},
-
-I wanted to follow up on my application for the {{position}} position at {{company}} submitted on {{application_date}}.
-
-I remain very excited about this opportunity and would love to discuss how my experience in {{skills}} aligns with your team's needs.
-
-Please let me know if you need any additional information.
-
-Best regards,
-{{name}}`,
-      },
-    };
-  }
 
   /**
    * Execute an apply task
@@ -85,87 +52,29 @@ Best regards,
   }
 
   /**
-   * Find HR/recruiter email addresses for a company
+   * Find HR/recruiter email addresses for a company — fully LLM-driven
    */
   async findHREmails(userId, params, trace) {
     const { companyName, website, linkedin } = params;
 
     await this.updateAgentStatus(userId, 'working', `Finding HR emails for ${companyName}`);
 
-    // Use LLM to research email patterns
+    // LLM researches and suggests best email candidates for this company
     const result = await ApplyChains.findEmails(companyName, website, linkedin, userId);
 
-    // Also try to find specific emails
-    const additionalEmails = await this.searchEmailPatterns(companyName, website);
+    const emails = result.emails || [];
 
-    // Merge results
-    const allEmails = [...(result.emails || []), ...additionalEmails];
-
-    // Remove duplicates
-    const uniqueEmails = allEmails.filter((email, index, self) =>
-      index === self.findIndex(e => e.email === email.email)
-    );
-
-    logAgentActivity('apply', 'emails_found', { 
-      company: companyName, 
-      count: uniqueEmails.length 
+    logAgentActivity('apply', 'emails_found', {
+      company: companyName,
+      count: emails.length
     });
 
-    await this.updateAgentStatus(userId, 'completed', `Found ${uniqueEmails.length} email addresses`);
+    await this.updateAgentStatus(userId, 'completed', `Found ${emails.length} email addresses`);
 
     return {
-      emails: uniqueEmails,
+      emails,
       research: result.research,
     };
-  }
-
-  /**
-   * Search for email patterns
-   */
-  async searchEmailPatterns(companyName, website) {
-    const emails = [];
-    
-    // Extract domain from website
-    const domain = website?.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
-    
-    if (domain) {
-      const companyNameNormalized = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-      
-      // Common email patterns
-      const patterns = [
-        `hr@${domain}`,
-        `recruiting@${domain}`,
-        `careers@${domain}`,
-        `jobs@${domain}`,
-        `recruiter@${domain}`,
-        `hiring@${domain}`,
-      ];
-
-      // Verify each email (simplified - in production use an email verification service)
-      for (const email of patterns) {
-        emails.push({
-          email,
-          type: this.determineEmailType(email),
-          confidence: 0.7,
-          source: 'pattern_matching',
-        });
-      }
-    }
-
-    return emails;
-  }
-
-  /**
-   * Determine email type
-   */
-  determineEmailType(email) {
-    const emailLower = email.toLowerCase();
-    if (emailLower.includes('hr')) return 'hr_general';
-    if (emailLower.includes('recruit')) return 'recruiting';
-    if (emailLower.includes('career')) return 'careers';
-    if (emailLower.includes('hiring')) return 'hiring';
-    if (emailLower.includes('jobs')) return 'jobs';
-    return 'general';
   }
 
   /**
@@ -179,7 +88,7 @@ Best regards,
     // Get candidate profile
     const candidateProfile = await this.getCandidateProfile(userId);
 
-    // Generate email using LLM
+    // LLM drafts a tailored, professional application email
     const result = await ApplyChains.draftEmail(
       candidateProfile || candidateInfo,
       targetJob,
@@ -188,32 +97,13 @@ Best regards,
       userId
     );
 
-    // Apply template if LLM fails
-    if (!result.subject || !result.body) {
-      const template = this.emailTemplates.application;
-      result.subject = this.fillTemplate(template.subject, { ...candidateProfile, ...targetJob });
-      result.body = this.fillTemplate(template.body, { ...candidateProfile, ...targetJob });
-    }
-
-    logAgentActivity('apply', 'email_drafted', { 
+    logAgentActivity('apply', 'email_drafted', {
       subject: result.subject,
-      company: targetJob.company 
+      company: targetJob.company
     });
 
     await this.updateAgentStatus(userId, 'completed', 'Email drafted');
 
-    return result;
-  }
-
-  /**
-   * Fill email template
-   */
-  fillTemplate(template, data) {
-    let result = template;
-    Object.keys(data).forEach(key => {
-      const regex = new RegExp(`{{${key}}}`, 'g');
-      result = result.replace(regex, data[key] || '');
-    });
     return result;
   }
 
@@ -368,36 +258,27 @@ Best regards,
   }
 
   /**
-   * Send follow-up email
+   * Send follow-up email — LLM generates the content
    */
   async sendFollowUp(userId, params, trace) {
-    const { applicationId, followUpType } = params;
+    const { applicationId } = params;
 
     const application = await Application.findOne({ _id: applicationId, userId });
-    
+
     if (!application) {
       throw new Error('Application not found');
     }
 
-    // Get original job
-    const job = await Job.findById(application.jobId);
-
-    // Generate follow-up email
-    const template = this.emailTemplates.followUp;
-    const emailContent = {
-      subject: this.fillTemplate(template.subject, {
-        position: application.position,
-        name: application.candidateName || 'Candidate',
-      }),
-      body: this.fillTemplate(template.body, {
-        greeting: 'Hiring Manager',
-        position: application.position,
-        company: application.company,
-        application_date: application.appliedAt?.toLocaleDateString(),
-        skills: 'relevant skills',
-        name: application.candidateName || 'Candidate',
-      }),
-    };
+    // LLM drafts a personalised follow-up email
+    const candidateName = application.candidateName || 'Candidate';
+    const applicationDate = application.appliedAt?.toLocaleDateString() || 'recently';
+    const emailContent = await ApplyChains.draftFollowUp(
+      candidateName,
+      application.position,
+      application.company,
+      applicationDate,
+      userId
+    );
 
     // Create approval request
     const approval = await Approval.createPending({

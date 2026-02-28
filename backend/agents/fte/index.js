@@ -11,7 +11,7 @@ const Memory = require('../../models/Memory');
 const Approval = require('../../models/Approval');
 const Application = require('../../models/Application');
 const Job = require('../../models/Job');
-const { ResumeBuilderChains, ApplyChains, FTEChains, OrchestratorChains, runPrompt } = require('../../services/langchain/chains');
+const { ResumeBuilderChains, ApplyChains, FTEChains, OrchestratorChains, PrepChains, runPrompt } = require('../../services/langchain/chains');
 const { FTE_PROMPTS } = require('../../services/langchain/prompts');
 const { emailService } = require('../../services/emailService');
 const { logAgentActivity } = require('../../services/langchain/langfuse');
@@ -19,17 +19,18 @@ const OrchestratorAgent = require('../orchestrator');
 
 // ─── States ───────────────────────────────────────────────────────────────────
 const STATES = {
-  WAITING_CV:     'waiting_cv',
-  CV_UPLOADED:    'cv_uploaded',  // kept for backward compat
-  READY:          'ready',        // has CV, free to give any command
-  ASKING_LOCATION:'asking_location',
-  SEARCHING:      'searching',
-  GENERATING_CVS: 'generating_cvs',
-  CV_REVIEW:      'cv_review',
-  FINDING_EMAILS: 'finding_emails',
-  EMAIL_REVIEW:   'email_review',
-  SENDING:        'sending',
-  DONE:           'done',
+  WAITING_CV:           'waiting_cv',
+  CV_UPLOADED:          'cv_uploaded',         // kept for backward compat
+  READY:                'ready',               // has CV, free to give any command
+  ASKING_LOCATION:      'asking_location',
+  SEARCHING:            'searching',
+  GENERATING_CVS:       'generating_cvs',
+  CV_REVIEW:            'cv_review',
+  FINDING_EMAILS:       'finding_emails',
+  EMAIL_REVIEW:         'email_review',
+  SENDING:              'sending',
+  PREPARING_INTERVIEW:  'preparing_interview',
+  DONE:                 'done',
 };
 
 const ASYNC_STATES = new Set([
@@ -37,6 +38,7 @@ const ASYNC_STATES = new Set([
   STATES.GENERATING_CVS,
   STATES.FINDING_EMAILS,
   STATES.SENDING,
+  STATES.PREPARING_INTERVIEW,
 ]);
 
 const DEFAULT_STATE = {
@@ -51,6 +53,7 @@ const DEFAULT_STATE = {
   emailDrafts: [],
   emailReviewApprovalId: null,
   sendResults: [],
+  prepResults: [],      // interview questions per applied company
   candidateProfile: null,
   cvFilePath: null,
   history: [],          // conversation history — last 10 messages
@@ -167,6 +170,7 @@ async function saveToHistory(userId, fteState, successCount) {
       .map(r => r.company)
       .filter(Boolean),
     completedAt: new Date().toISOString(),
+    messages: fteState.history || [],
   };
   await Memory.findOneAndUpdate(
     { userId, memoryType: 'long_term', category: 'fte_history', key },
@@ -184,6 +188,16 @@ async function getHistoryList(userId) {
   return records.map(r => r.value);
 }
 
+async function getHistorySession(userId, key) {
+  const record = await Memory.findOne({
+    userId,
+    memoryType: 'long_term',
+    category: 'fte_history',
+    key,
+  });
+  return record?.value || null;
+}
+
 // ─── Main FTE Agent ───────────────────────────────────────────────────────────
 class FTEAgent {
 
@@ -199,7 +213,7 @@ class FTEAgent {
     if (message && message.trim().toLowerCase() === '/reset') {
       const fresh = await resetState(userId);
       return {
-        botMessage: 'Reset ho gaya! Dobara shuru karte hain.\n\nApni **CV (PDF)** upload karein ya kuch bhi poochein.',
+        botMessage: 'Reset complete! Starting fresh.\n\nPlease upload your **CV (PDF)** to begin.',
         state: fresh.state,
       };
     }
@@ -207,12 +221,13 @@ class FTEAgent {
     // ── Async ops in progress → just inform ─────────────────────────────────
     if (ASYNC_STATES.has(fteState.state)) {
       const msgs = {
-        searching:      'Jobs dhundh raha hoon, thoda ruko... _(polling chal raha hai)_',
-        generating_cvs: 'Tailored CVs bana raha hoon, thoda ruko...',
-        finding_emails: 'HR emails dhundh raha hoon aur drafts bana raha hoon...',
-        sending:        'Emails bhej raha hoon...',
+        searching:            'Searching for jobs, please wait... _(polling in progress)_',
+        generating_cvs:       'Generating tailored CVs, please wait...',
+        finding_emails:       'Finding HR emails and drafting applications...',
+        sending:              'Sending emails...',
+        preparing_interview:  'Generating interview questions, please wait...',
       };
-      return { botMessage: msgs[fteState.state] || 'Kaam ho raha hai...', state: fteState.state };
+      return { botMessage: msgs[fteState.state] || 'Working on it...', state: fteState.state };
     }
 
     // ── New CV upload → always accept ────────────────────────────────────────
@@ -223,14 +238,14 @@ class FTEAgent {
     // ── Pending HITL approvals → remind ─────────────────────────────────────
     if (fteState.state === STATES.CV_REVIEW) {
       return {
-        botMessage: 'Tailored CVs ready hain! Cards dekh kar **Approve** ya **Reject** karein.',
+        botMessage: 'Your tailored CVs are ready! Review the cards below and click **Approve** or **Reject**.',
         state: fteState.state,
         data: { cvResults: fteState.cvResults, cvReviewApprovalId: fteState.cvReviewApprovalId },
       };
     }
     if (fteState.state === STATES.EMAIL_REVIEW) {
       return {
-        botMessage: 'Email drafts ready hain! Review kar ke **Send All** press karein.',
+        botMessage: 'Email drafts are ready! Review them below and click **Send All** to proceed.',
         state: fteState.state,
         data: { emailDrafts: fteState.emailDrafts, emailReviewApprovalId: fteState.emailReviewApprovalId },
       };
@@ -241,7 +256,7 @@ class FTEAgent {
     if (!message || message.trim().length === 0) {
       if (!fteState.candidateProfile) {
         return {
-          botMessage: `Assalam o Alaikum! Main aapka **Digital FTE** hoon 🤖\n\nMain aapke liye:\n• **Jobs dhundhonga** (Google Jobs via SerpAPI)\n• **Har job ke liye tailored CV** banaunga (ATS score ke saath)\n• **HR ko automatically email** kar dunga\n\nShuru karne ke liye apni **CV (PDF)** upload karein.`,
+          botMessage: `Hello! I am your **Digital FTE** — your personal job hunting assistant.\n\nHere is what I do for you:\n• **Find jobs** (Google Jobs via SerpAPI)\n• **Generate a tailored CV** for each job (with ATS score)\n• **Automatically email HR** with your application\n\nTo get started, please upload your **CV (PDF)**.`,
           state: STATES.WAITING_CV,
         };
       }
@@ -259,14 +274,14 @@ class FTEAgent {
 
   /** Ready state welcome — shows what the user can do */
   readyMessage(fteState) {
-    const name = fteState.candidateProfile?.contactInfo?.name || 'aap';
+    const name = fteState.candidateProfile?.contactInfo?.name || 'there';
     const parts = [];
-    if (fteState.jobs?.length)        parts.push(`• **Jobs mili hain:** ${fteState.jobs.length}`);
-    if (fteState.cvResults?.length)   parts.push(`• **CVs bani hain:** ${fteState.cvResults.length}`);
+    if (fteState.jobs?.length)        parts.push(`• **Jobs found:** ${fteState.jobs.length}`);
+    if (fteState.cvResults?.length)   parts.push(`• **CVs generated:** ${fteState.cvResults.length}`);
     if (fteState.emailDrafts?.length) parts.push(`• **Email drafts:** ${fteState.emailDrafts.length}`);
     const summary = parts.length ? '\n\n**Pipeline status:**\n' + parts.join('\n') : '';
     return {
-      botMessage: `CV mil chuki hai, **${name}**! Kya karna hai? 🤖${summary}\n\n**Commands:**\n• _"Software Engineer Karachi"_ → jobs search\n• _"CVs banao"_ → tailored CVs generate\n• _"Apply karo"_ → emails bhejo\n• _"/reset"_ → sab clear karo`,
+      botMessage: `CV received, **${name}**! What would you like to do?${summary}\n\n**Try these commands:**\n• _"Software Engineer Karachi"_ → search jobs\n• _"Generate CVs"_ → create tailored CVs\n• _"Apply now"_ → send emails\n• _"/reset"_ → start over`,
       state: fteState.state || STATES.READY,
     };
   }
@@ -285,7 +300,8 @@ class FTEAgent {
       location:      fteState.lastLocation || fteState.location || 'none',
       cvCount:       fteState.cvResults?.filter(r => r.cv)?.length || 0,
       emailCount:    fteState.emailDrafts?.filter(r => !r.error)?.length || 0,
-      history:       (fteState.history || []).slice(-6)
+      sentCount:     fteState.sendResults?.filter(r => r.success)?.length || 0,
+      history:       (fteState.history || []).slice(-12)
                        .map(h => `${h.role === 'user' ? 'User' : 'Bot'}: ${h.content}`)
                        .join('\n') || '(no history)',
       message:       text,
@@ -303,12 +319,12 @@ class FTEAgent {
       logAgentActivity('fte', 'brain_error', { error: err.message });
       // Fallback: safe generic reply
       return {
-        botMessage: 'Kya karna chahte hain?\n• _"Software Engineer Karachi"_ → jobs\n• _"CVs banao"_ → tailored CVs\n• _"Apply karo"_ → emails\n• _"/reset"_ → reset',
+        botMessage: 'What would you like to do?\n• _"Software Engineer Karachi"_ → search jobs\n• _"Generate CVs"_ → tailored CVs\n• _"Apply now"_ → send emails\n• _"/reset"_ → reset',
         state: fteState.state || STATES.READY,
       };
     }
 
-    const reply = brain.message || 'Samajh nahi aaya, dobara likhein.';
+    const reply = brain.message || 'I did not understand that. Please try again.';
     const action = brain.action || 'none';
 
     // ── Execute the action the LLM chose ─────────────────────────────────────
@@ -375,17 +391,29 @@ class FTEAgent {
       return { botMessage: reply, state: STATES.FINDING_EMAILS };
     }
 
+    if (action === 'prepare_interview') {
+      await setState(userId, { state: STATES.PREPARING_INTERVIEW });
+      this.prepInterviewAsync(userId).catch(err => {
+        console.error('[FTE] prepInterviewAsync crashed:', err);
+        setState(userId, { state: STATES.DONE, error: err.message }).catch(console.error);
+      });
+      await this.addToHistory(userId, await getState(userId), 'bot', reply);
+      return { botMessage: reply, state: STATES.PREPARING_INTERVIEW };
+    }
+
     // action === 'none' — just reply
     await this.addToHistory(userId, await getState(userId), 'bot', reply);
     return { botMessage: reply, state: fteState.state || STATES.READY };
   }
 
-  /** Add a message to conversation history (max 10 messages) */
-  async addToHistory(userId, fteState, role, content) {
+  /** Add a message to conversation history (max 20 messages) */
+  async addToHistory(userId, fteState, role, content, type = 'text', data = null) {
     const history = Array.isArray(fteState.history) ? fteState.history : [];
-    history.push({ role, content, ts: Date.now() });
-    // Keep last 10 messages only
-    if (history.length > 10) history.splice(0, history.length - 10);
+    const entry = { role, type, content, ts: Date.now() };
+    if (data !== null) entry.data = data;
+    history.push(entry);
+    // Keep last 20 messages only
+    if (history.length > 20) history.splice(0, history.length - 20);
     await setState(userId, { history });
   }
 
@@ -398,7 +426,7 @@ class FTEAgent {
     const { jobs, candidateProfile } = fteState;
 
     if (!jobs?.length) {
-      await setState(userId, { state: STATES.READY, error: 'Pehle jobs dhundhen' });
+      await setState(userId, { state: STATES.READY, error: 'Please search for jobs first.' });
       return;
     }
 
@@ -456,6 +484,16 @@ class FTEAgent {
     });
 
     await setState(userId, { state: STATES.CV_REVIEW, cvResults, cvReviewApprovalId: approval.approvalId });
+
+    // Save to conversation history
+    const stateAfterCVGen = await getState(userId);
+    const validGenCVs = cvResults.filter(r => r.cv).length;
+    await this.addToHistory(
+      userId, stateAfterCVGen, 'bot',
+      `${validGenCVs} tailored CV${validGenCVs !== 1 ? 's' : ''} are ready! Review and approve to continue.`,
+      'cv_approval',
+      { cvResults, cvReviewApprovalId: approval.approvalId }
+    );
   }
 
   /**
@@ -471,7 +509,7 @@ class FTEAgent {
 
       if (!resumeText || resumeText.trim().length < 50) {
         return {
-          botMessage: 'CV parse nahi ho saki. Please ek proper PDF CV upload karein.',
+          botMessage: 'Could not parse the CV. Please upload a valid PDF resume.',
           state: STATES.WAITING_CV,
         };
       }
@@ -509,13 +547,13 @@ class FTEAgent {
       logAgentActivity('fte', 'cv_uploaded', { userId, name, skillCount });
 
       return {
-        botMessage: `CV mil gayi! ✓ **${name}** — ${skillCount} skills detect hui hain.\n\nAb ek hi message mein batayein — **kaunsi role** aur **kaunse city** mein job chahiye?\n\n_(misaal: "Software Engineer Karachi" ya "Data Analyst in Lahore")_`,
+        botMessage: `CV received! ✓ **${name}** — ${skillCount} skills detected.\n\nNow tell me in one message — **what role** and **which city** are you looking for?\n\n_(e.g. "Software Engineer Karachi" or "Data Analyst in Lahore")_`,
         state: STATES.READY,
       };
     } catch (err) {
       logAgentActivity('fte', 'cv_upload_error', { error: err.message });
       return {
-        botMessage: `CV parse karne mein masla aaya: ${err.message}. Dobara try karein.`,
+        botMessage: `Failed to parse CV: ${err.message}. Please try again with a valid PDF.`,
         state: STATES.WAITING_CV,
       };
     }
@@ -528,7 +566,7 @@ class FTEAgent {
   async handleRoleCapture(userId, message, fteState) {
     if (!message || message.trim().length === 0) {
       return {
-        botMessage: 'Please role aur city batayein, jaise "Software Engineer Karachi".',
+        botMessage: 'Please tell me the role and city, e.g. "Software Engineer Karachi".',
         state: STATES.READY,
       };
     }
@@ -578,7 +616,7 @@ class FTEAgent {
         setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
       });
       return {
-        botMessage: `Theek hai! **${role}** jobs **${location}** mein dhundh raha hoon... _(15-30 seconds lag sakte hain)_`,
+        botMessage: `Searching for **${role}** jobs in **${location}**... _(this may take 15-30 seconds)_`,
         state: STATES.SEARCHING,
       };
     }
@@ -586,7 +624,7 @@ class FTEAgent {
     // Only role found — ask for city
     await setState(userId, { state: STATES.ASKING_LOCATION, role });
     return {
-      botMessage: `**${role}** — acha choice!\n\nAb batayein — **kaunse city** mein job chahiye? (e.g., Karachi, Lahore, Islamabad, Remote)`,
+      botMessage: `**${role}** — great choice!\n\nWhich city are you looking for? (e.g. Karachi, Lahore, Islamabad, Remote)`,
       state: STATES.ASKING_LOCATION,
     };
   }
@@ -598,7 +636,7 @@ class FTEAgent {
     const location = message ? message.trim() : '';
     if (!location) {
       return {
-        botMessage: 'Please city ka naam batayein, jaise Karachi, Lahore, ya Remote.',
+        botMessage: 'Please provide a city name, e.g. Karachi, Lahore, or Remote.',
         state: STATES.ASKING_LOCATION,
       };
     }
@@ -613,7 +651,7 @@ class FTEAgent {
     });
 
     return {
-      botMessage: `Theek hai! **${fteState.role}** jobs **${location}** mein dhundh raha hoon... (yeh 15-30 seconds le sakta hai)`,
+      botMessage: `Searching for **${fteState.role}** jobs in **${location}**... (this may take 15-30 seconds)`,
       state: STATES.SEARCHING,
     };
   }
@@ -651,7 +689,7 @@ class FTEAgent {
       await setState(userId, {
         state: STATES.READY,
         jobs: [],
-        error: `Job search fail: ${err.message}`,
+        error: `Job search failed: ${err.message}`,
       });
       return;
     }
@@ -663,7 +701,7 @@ class FTEAgent {
       await setState(userId, {
         state: STATES.READY,
         jobs: [],
-        error: `"${fteState.role}" ke liye "${fteState.location}" mein koi job nahi mili. Role ya city badal kar dobara try karein.`,
+        error: `No jobs found for "${fteState.role}" in "${fteState.location}". Try a different role or city.`,
       });
       return;
     }
@@ -773,6 +811,16 @@ class FTEAgent {
       cvReviewApprovalId: approval.approvalId,
     });
 
+    // Save to conversation history so reopened sessions show the CV cards
+    const stateAfterCV = await getState(userId);
+    const validCVs = cvResults.filter(r => r.cv).length;
+    await this.addToHistory(
+      userId, stateAfterCV, 'bot',
+      `${validCVs} tailored CV${validCVs !== 1 ? 's' : ''} are ready! Review and approve to continue.`,
+      'cv_approval',
+      { cvResults, cvReviewApprovalId: approval.approvalId }
+    );
+
     logAgentActivity('fte', 'cv_review_ready', { approvalId: approval.approvalId });
   }
 
@@ -803,7 +851,7 @@ class FTEAgent {
       setState(userId, { state: STATES.CV_REVIEW, error: err.message }).catch(console.error);
     });
 
-    return { botMessage: 'CVs approve ho gayi! HR emails dhundh raha hoon...', state: STATES.FINDING_EMAILS };
+    return { botMessage: 'CVs approved! Finding HR emails and drafting applications...', state: STATES.FINDING_EMAILS };
   }
 
   /**
@@ -827,51 +875,49 @@ class FTEAgent {
       if (!cvResult.cv) continue; // skip failed CVs
       const { job } = cvResult;
       try {
-        // ── Extract HR email from real company domain ────────────────────────
-        // Priority: companyApplyUrl > sourceUrl > company name slug
-        const JOB_BOARDS = ['google.com', 'linkedin.com', 'indeed.com', 'glassdoor.com',
-          'rozee.pk', 'bayt.com', 'monster.com', 'ziprecruiter.com'];
+        const { findHREmail } = require('../../services/hunterService');
+        const siteUrl = job.companyApplyUrl || job.sourceUrl || null;
 
-        const extractDomain = (url) => {
-          if (!url) return null;
-          try {
-            const hostname = new URL(url).hostname.replace(/^www\./, '');
-            if (JOB_BOARDS.some(b => hostname.endsWith(b))) return null;
-            // Strip subdomains like 'careers.' or 'jobs.' to get root domain
-            const parts = hostname.split('.');
-            if (parts.length > 2 && ['careers', 'jobs', 'apply', 'work', 'portal'].includes(parts[0])) {
-              return parts.slice(1).join('.');
-            }
-            return hostname;
-          } catch { return null; }
-        };
-
-        // Try company's own URL first, then sourceUrl
-        const companyDomain = extractDomain(job.companyApplyUrl) || extractDomain(job.sourceUrl);
-
-        let hrEmail = null;
-
-        if (companyDomain) {
-          // Try common HR email prefixes — use hr@ as primary (most universal)
-          const candidates = ['hr', 'careers', 'jobs', 'recruiting', 'talent', 'recruitment'];
-          hrEmail = `${candidates[0]}@${companyDomain}`;
-          logAgentActivity('fte', 'email_from_domain', {
-            company: job.company,
-            email: hrEmail,
-            domain: companyDomain,
-            source: job.companyApplyUrl ? 'company_url' : 'source_url',
-          });
+        // ── STEP 1: Hunter.io — real verified emails ──────────────────────────
+        let hrEmail    = null;
+        let emailSource     = 'none';
+        let emailVerified   = false;
+        let emailVerifyResult = null;
+        try {
+          const hunterResult = await findHREmail(job.company, siteUrl);
+          if (hunterResult.email) {
+            hrEmail           = hunterResult.email;
+            emailSource       = 'hunter';
+            emailVerified     = hunterResult.verified || false;
+            emailVerifyResult = hunterResult.verifyResult || 'unknown';
+            logAgentActivity('fte', 'hunter_email_found', {
+              company: job.company,
+              email: hrEmail,
+              verified: emailVerified,
+              verifyResult: emailVerifyResult,
+              domain: hunterResult.domain,
+            });
+          } else {
+            logAgentActivity('fte', 'hunter_email_not_found', { company: job.company, domain: hunterResult.domain });
+          }
+        } catch (hunterErr) {
+          logAgentActivity('fte', 'hunter_error', { company: job.company, error: hunterErr.message });
         }
 
-        // Last resort: derive domain from company name (better than nothing)
+        // ── STEP 2: LLM fallback — only if Hunter.io found nothing ───────────
         if (!hrEmail) {
-          const slug = (job.company || '').toLowerCase()
-            .replace(/\s+(pvt|ltd|inc|corp|llc|private|limited|pakistan|pk)\.?\s*/gi, '')
-            .replace(/[^a-z0-9]+/g, '')
-            .substring(0, 25);
-          if (slug) {
-            hrEmail = `hr@${slug}.com`;
-            logAgentActivity('fte', 'email_from_name_slug', { company: job.company, email: hrEmail });
+          try {
+            const websiteHint = siteUrl || null;
+            const emailResult = await ApplyChains.findEmails(job.company, websiteHint, null, userId);
+            const emails = emailResult?.emails || [];
+            const best = emails.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
+            hrEmail = best?.email || null;
+            if (hrEmail) emailSource = 'llm';
+            logAgentActivity('fte', 'llm_email_fallback', {
+              company: job.company, email: hrEmail, candidates: emails.length,
+            });
+          } catch (emailErr) {
+            logAgentActivity('fte', 'llm_email_error', { company: job.company, error: emailErr.message });
           }
         }
 
@@ -885,7 +931,7 @@ class FTEAgent {
             body: null,
             cvPath: cvFilePath,
             atsScore: cvResult.atsScore,
-            error: 'HR email derive nahi ho saki',
+            error: 'Could not find HR email for this company',
           });
           continue;
         }
@@ -906,15 +952,17 @@ class FTEAgent {
         }]);
 
         const draft = emailTaskResults[i + 1]?.data;
-
         const candidateName = candidateProfile?.contactInfo?.name || 'Applicant';
-        const fallbackBody = `Dear Hiring Manager,\n\nI am writing to express my strong interest in the ${job.title} position at ${job.company}. With my background and experience, I believe I would be a valuable addition to your team.\n\nPlease find my CV attached for your review. I look forward to the opportunity to discuss how my skills align with your requirements.\n\nBest regards,\n${candidateName}`;
+
         emailDrafts.push({
           jobId: cvResult.jobId,
           job,
           hrEmail,
+          emailSource,       // 'hunter' | 'llm' | 'none'
+          emailVerified,     // true if Hunter.io confirmed deliverable
+          emailVerifyResult, // 'deliverable' | 'risky' | 'unknown'
           subject: draft?.subject || `Application for ${job.title} — ${candidateName}`,
-          body: draft?.body || draft?.emailBody || draft?.content || fallbackBody,
+          body: draft?.body || draft?.emailBody || draft?.content || null,
           cvPath: cvFilePath,
           atsScore: cvResult.atsScore,
         });
@@ -958,6 +1006,16 @@ class FTEAgent {
       emailDrafts,
       emailReviewApprovalId: approval.approvalId,
     });
+
+    // Save to conversation history so reopened sessions show the email cards
+    const stateAfterEmail = await getState(userId);
+    const validDrafts = emailDrafts.filter(d => d.hrEmail && !d.error).length;
+    await this.addToHistory(
+      userId, stateAfterEmail, 'bot',
+      `${validDrafts} email draft${validDrafts !== 1 ? 's' : ''} ready! Review and approve to send.`,
+      'email_approval',
+      { emailDrafts, emailReviewApprovalId: approval.approvalId }
+    );
   }
 
   /**
@@ -985,7 +1043,7 @@ class FTEAgent {
       setState(userId, { state: STATES.EMAIL_REVIEW, error: err.message }).catch(console.error);
     });
 
-    return { botMessage: 'Emails bhej raha hoon...', state: STATES.SENDING };
+    return { botMessage: 'Sending emails now...', state: STATES.SENDING };
   }
 
   /**
@@ -1022,15 +1080,19 @@ class FTEAgent {
           jobTitle: draft.job?.title,
           hrEmail: null,
           success: false,
-          error: draft.error || 'HR email nahi mili',
+          error: draft.error || 'HR email not found',
         });
         continue;
       }
 
       try {
-        // Ensure body is never empty — fallback to simple template
-        const emailBody = draft.body || `Dear Hiring Manager,\n\nI am applying for the ${draft.job?.title || 'position'} role at ${draft.job?.company || 'your company'}. Please find my CV attached.\n\nBest regards,\n${userName}`;
+        const emailBody = draft.body;
         const emailSubject = draft.subject || `Application for ${draft.job?.title || 'Position'} — ${userName}`;
+
+        if (!emailBody) {
+          sendResults.push({ jobId: draft.jobId, company: draft.job?.company, success: false, error: 'Email body missing — LLM draft failed' });
+          continue;
+        }
 
         console.log(`[FTE] Sending email to ${draft.hrEmail} for ${draft.job?.company}...`);
         const result = await emailService.sendApplicationEmail({
@@ -1114,6 +1176,25 @@ class FTEAgent {
       sendResults,
     });
 
+    // Save result message to conversation history
+    const stateAfterDone = await getState(userId);
+    await this.addToHistory(
+      userId, stateAfterDone, 'bot',
+      `Done! ${successCount} application${successCount !== 1 ? 's' : ''} sent successfully.`,
+      'result',
+      { sendResults }
+    );
+
+    // Offer interview prep if any emails were sent
+    if (successCount > 0) {
+      const appliedCompanies = sendResults.filter(r => r.success).map(r => r.company).filter(Boolean);
+      const companyList = appliedCompanies.slice(0, 3).join(', ');
+      const extra = appliedCompanies.length > 3 ? '...' : '';
+      const prepOffer = `Want me to prepare **interview questions** for your applications (**${companyList}${extra}**)?\n\nJust say _"yes"_ or _"prepare interview"_.`;
+      const stateForPrep = await getState(userId);
+      await this.addToHistory(userId, stateForPrep, 'bot', prepOffer);
+    }
+
     // Save to history (non-critical — don't let this crash the pipeline)
     try {
       await saveToHistory(userId, await getState(userId), successCount);
@@ -1127,9 +1208,77 @@ class FTEAgent {
     });
   }
 
+  /**
+   * Async: generate interview questions for each successfully applied company
+   * → saves results to state + history as 'prep_questions' message
+   * State: preparing_interview → done
+   */
+  async prepInterviewAsync(userId) {
+    const fteState = await getState(userId);
+    const { sendResults, candidateProfile, role } = fteState;
+    const successfulApps = (sendResults || []).filter(r => r.success);
+
+    if (!successfulApps.length) {
+      await setState(userId, { state: STATES.DONE });
+      return;
+    }
+
+    logAgentActivity('fte', 'prep_started', { count: successfulApps.length });
+
+    const prepResults = [];
+
+    // Limit to 3 companies to keep LLM usage reasonable
+    for (const app of successfulApps.slice(0, 3)) {
+      try {
+        const experienceSummary = JSON.stringify(
+          (candidateProfile?.experience || []).slice(0, 2)
+        );
+        const questions = await PrepChains.generateQuestions(
+          app.jobTitle || role || 'Software Engineer',
+          app.company,
+          experienceSummary,
+          userId
+        );
+        prepResults.push({
+          company:  app.company,
+          jobTitle: app.jobTitle || role,
+          questions: {
+            technical:   (questions.technical   || []).slice(0, 4),
+            behavioral:  (questions.behavioral  || []).slice(0, 4),
+            situational: (questions.situational || []).slice(0, 3),
+          },
+        });
+        logAgentActivity('fte', 'prep_questions_generated', { company: app.company });
+      } catch (err) {
+        logAgentActivity('fte', 'prep_error', { company: app.company, error: err.message });
+        prepResults.push({ company: app.company, jobTitle: app.jobTitle || role, error: err.message });
+      }
+    }
+
+    await setState(userId, { state: STATES.DONE, prepResults });
+
+    // Save to conversation history
+    const stateAfterPrep = await getState(userId);
+    const successPrep = prepResults.filter(p => !p.error).length;
+    const companies = prepResults.filter(p => !p.error).map(p => p.company).join(', ');
+    const summaryMsg = successPrep > 0
+      ? `Interview prep ready for **${companies}**! Here are the questions to practice:`
+      : 'Sorry, could not generate interview questions at this time.';
+
+    await this.addToHistory(
+      userId, stateAfterPrep, 'bot',
+      summaryMsg,
+      'prep_questions',
+      { prepResults }
+    );
+
+    logAgentActivity('fte', 'prep_done', { count: prepResults.length });
+  }
+
   // ── Exposed helpers for route layer ──────────────────────────────────────────
   getStateForUser(userId) { return getState(userId); }
   getHistory(userId) { return getHistoryList(userId); }
+  getHistorySession(userId, key) { return getHistorySession(userId, key); }
   resetUser(userId) { return resetState(userId); }
 }
 

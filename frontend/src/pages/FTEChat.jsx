@@ -11,7 +11,7 @@ import {
   User, Key, Save, Edit3, Shield,
 } from 'lucide-react';
 
-const ASYNC_STATES = new Set(['searching', 'generating_cvs', 'finding_emails', 'sending']);
+const ASYNC_STATES = new Set(['searching', 'generating_cvs', 'finding_emails', 'sending', 'preparing_interview']);
 
 const STATE_META = {
   waiting_cv:     { label: 'Upload CV',               color: '#b2d9c5', dot: '#c8e8d8' },
@@ -23,8 +23,9 @@ const STATE_META = {
   cv_review:      { label: 'Review CVs',              color: '#8b5cf6', dot: '#8b5cf6' },
   finding_emails: { label: 'Finding HR Emails...',    color: '#f59e0b', dot: '#f59e0b' },
   email_review:   { label: 'Review Emails',           color: '#f97316', dot: '#f97316' },
-  sending:        { label: 'Sending Applications...', color: '#f59e0b', dot: '#f59e0b' },
-  done:           { label: 'Complete',                color: '#10b981', dot: '#10b981' },
+  sending:              { label: 'Sending Applications...', color: '#f59e0b', dot: '#f59e0b' },
+  preparing_interview:  { label: 'Preparing Interview...', color: '#8b5cf6', dot: '#8b5cf6' },
+  done:                 { label: 'Complete',                color: '#10b981', dot: '#10b981' },
 };
 
 const STYLES = `
@@ -226,6 +227,14 @@ const STYLES = `
   .fte-pw-wrap { position: relative; }
   .fte-pw-eye { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #7dba9a; padding: 0; }
   .fte-pw-eye:hover { color: #10b981; }
+
+  /* History viewing banner */
+  .fte-history-banner { display: flex; align-items: center; justify-content: space-between; background: #fffbeb; border-bottom: 1px solid #fde68a; padding: 7px 16px; flex-shrink: 0; gap: 8px; }
+  .fte-history-banner-text { color: #78350f; font-size: 0.72rem; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fte-history-banner-btn { display: flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #fde68a; color: #78350f; font-size: 0.72rem; font-weight: 700; cursor: pointer; font-family: inherit; padding: 4px 10px; border-radius: 8px; transition: all 0.15s; flex-shrink: 0; }
+  .fte-history-banner-btn:hover { background: #fef9c3; }
+  .fte-session-card-clickable { cursor: pointer; }
+  .fte-session-card-clickable:hover { background: #e8f7ef; border-color: #c8e8d8; }
 `;
 
 function TypingDots() {
@@ -254,11 +263,11 @@ function ATSScore({score}) {
   return <div style={{textAlign:'center',minWidth:42}}><p className="fte-ats-score" style={{color}}>{score}%</p><p className="fte-ats-label">ATS</p></div>;
 }
 
-function CVApprovalCards({cvResults,approvalId,onApprove,onReject,loading}) {
+function CVApprovalCards({cvResults,approvalId,onApprove,onReject,loading,readOnly}) {
   const [expanded,setExpanded]=useState(null);
   const valid=cvResults.filter(r=>!r.error);
   return <div style={{width:'100%'}}>
-    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}><FileText style={{width:15,height:15,color:'#8b5cf6'}}/><p className="fte-approve-label">{valid.length} tailored CV{valid.length!==1?'s':''} ready</p></div>
+    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}><FileText style={{width:15,height:15,color:'#8b5cf6'}}/><p className="fte-approve-label">{valid.length} tailored CV{valid.length!==1?'s':''} {readOnly?'generated':'ready'}</p></div>
     <div style={{marginBottom:12}}>{cvResults.map((result,idx)=>{
       const score=result.atsScore?.overall??result.atsScore?.format??null;
       const cv=result.cv||{};const isOpen=expanded===idx;
@@ -284,36 +293,51 @@ function CVApprovalCards({cvResults,approvalId,onApprove,onReject,loading}) {
         </div>}
       </div>;
     })}</div>
-    <div style={{display:'flex',gap:8}}>
-      <button className="fte-approve-btn" onClick={()=>onApprove(approvalId)} disabled={loading||valid.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="fte-spin"/>Approving...</>:<><CheckCircle style={{width:14,height:14}}/>Approve {valid.length} CV{valid.length!==1?'s':''}</>}</button>
-      <button className="fte-cancel-btn" onClick={()=>onReject()} disabled={loading}><XCircle style={{width:13,height:13}}/>Cancel</button>
-    </div>
+    {readOnly
+      ? <div style={{display:'flex',alignItems:'center',gap:6,background:'#e8f7ef',border:'1px solid #c8e8d8',borderRadius:10,padding:'8px 14px'}}><CheckCircle style={{width:14,height:14,color:'#059669'}}/><span style={{color:'#059669',fontSize:'0.8rem',fontWeight:700}}>Approved — {valid.length} CV{valid.length!==1?'s':''} were generated</span></div>
+      : <div style={{display:'flex',gap:8}}>
+          <button className="fte-approve-btn" onClick={()=>onApprove(approvalId)} disabled={loading||valid.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="fte-spin"/>Approving...</>:<><CheckCircle style={{width:14,height:14}}/>Approve {valid.length} CV{valid.length!==1?'s':''}</>}</button>
+          <button className="fte-cancel-btn" onClick={()=>onReject()} disabled={loading}><XCircle style={{width:13,height:13}}/>Cancel</button>
+        </div>
+    }
   </div>;
 }
 
-function EmailApprovalCards({emailDrafts,approvalId,onSend,onReject,loading}) {
+function EmailApprovalCards({emailDrafts,approvalId,onSend,onReject,loading,readOnly}) {
   const valid=emailDrafts.filter(d=>d.hrEmail&&!d.error);
   const [drafts,setDrafts]=useState(valid.map(d=>({...d})));
   const [expanded,setExpanded]=useState(null);
   const skipped=emailDrafts.filter(d=>!d.hrEmail||d.error);
-  const update=(idx,field,val)=>{const u=[...drafts];u[idx]={...u[idx],[field]:val};setDrafts(u);};
+  const update=(idx,field,val)=>{if(readOnly)return;const u=[...drafts];u[idx]={...u[idx],[field]:val};setDrafts(u);};
   return <div style={{width:'100%'}}>
-    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}><Mail style={{width:15,height:15,color:'#f97316'}}/><p className="fte-approve-label">{drafts.length} email draft{drafts.length!==1?'s':''} ready</p></div>
-    {skipped.length>0&&<p style={{fontSize:'0.72rem',color:'#3a7055',fontWeight:600,marginBottom:10}}>{skipped.length} companies ki HR email nahi mili — skip hongi</p>}
+    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}><Mail style={{width:15,height:15,color:'#f97316'}}/><p className="fte-approve-label">{drafts.length} email draft{drafts.length!==1?'s':''} {readOnly?'sent':'ready'}</p></div>
+    {skipped.length>0&&<p style={{fontSize:'0.72rem',color:'#3a7055',fontWeight:600,marginBottom:10}}>{skipped.length} companies HR email not found — skipped</p>}
     <div style={{marginBottom:12}}>{drafts.map((draft,idx)=><div key={idx} className="fte-card">
       <button className="fte-card-btn" onClick={()=>setExpanded(expanded===idx?null:idx)}>
-        <div style={{flex:1,minWidth:0}}><p className="fte-card-title">{draft.job?.company}</p><p style={{fontSize:'0.7rem',color:'#3a7055',fontWeight:600,marginTop:2}}>{draft.hrEmail} · {draft.job?.title}</p></div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <p className="fte-card-title">{draft.job?.company}</p>
+            {draft.emailVerified&&<span style={{fontSize:'0.6rem',fontWeight:800,background:'#e8f7ef',color:'#059669',border:'1px solid #c8e8d8',borderRadius:6,padding:'1px 6px',flexShrink:0}}>✓ Deliverable</span>}
+            {draft.emailSource==='hunter'&&!draft.emailVerified&&draft.emailVerifyResult==='risky'&&<span style={{fontSize:'0.6rem',fontWeight:800,background:'#fff7ed',color:'#c2410c',border:'1px solid #fed7aa',borderRadius:6,padding:'1px 6px',flexShrink:0}}>⚠ Risky</span>}
+            {draft.emailSource==='hunter'&&!draft.emailVerified&&draft.emailVerifyResult!=='risky'&&<span style={{fontSize:'0.6rem',fontWeight:800,background:'#f3f4f6',color:'#374151',border:'1px solid #d1d5db',borderRadius:6,padding:'1px 6px',flexShrink:0}}>? Unverified</span>}
+            {draft.emailSource==='llm'&&<span style={{fontSize:'0.6rem',fontWeight:800,background:'#fffbeb',color:'#b45309',border:'1px solid #fde68a',borderRadius:6,padding:'1px 6px',flexShrink:0}}>~ Estimated</span>}
+          </div>
+          <p style={{fontSize:'0.7rem',color:'#3a7055',fontWeight:600,marginTop:2}}>{draft.hrEmail} · {draft.job?.title}</p>
+        </div>
         {expanded===idx?<ChevronUp style={{width:14,height:14,color:'#3a7055',flexShrink:0}}/>:<ChevronDown style={{width:14,height:14,color:'#3a7055',flexShrink:0}}/>}
       </button>
       {expanded===idx&&<div className="fte-card-expand" style={{display:'flex',flexDirection:'column',gap:10}}>
-        {[{label:'To (HR Email)',key:'hrEmail'},{label:'Subject',key:'subject'}].map(({label,key})=><div key={key}><div className="fte-draft-label">{label}</div><input type="text" value={draft[key]||''} onChange={e=>update(idx,key,e.target.value)} className="fte-draft-input" style={{marginTop:4}}/></div>)}
-        <div><div className="fte-draft-label">Email Body</div><textarea value={draft.body||''} onChange={e=>update(idx,'body',e.target.value)} rows={5} className="fte-draft-input" style={{marginTop:4,resize:'none',lineHeight:1.55}}/></div>
+        {[{label:'To (HR Email)',key:'hrEmail'},{label:'Subject',key:'subject'}].map(({label,key})=><div key={key}><div className="fte-draft-label">{label}</div><input type="text" value={draft[key]||''} onChange={e=>update(idx,key,e.target.value)} readOnly={readOnly} className="fte-draft-input" style={{marginTop:4,background:readOnly?'#f7fdf9':''}}/></div>)}
+        <div><div className="fte-draft-label">Email Body</div><textarea value={draft.body||''} onChange={e=>update(idx,'body',e.target.value)} readOnly={readOnly} rows={5} className="fte-draft-input" style={{marginTop:4,resize:'none',lineHeight:1.55,background:readOnly?'#f7fdf9':''}}/></div>
       </div>}
     </div>)}</div>
-    <div style={{display:'flex',gap:8}}>
-      <button className="fte-send-email-btn" onClick={()=>onSend(approvalId,drafts)} disabled={loading||drafts.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="fte-spin"/>Sending...</>:<><Send style={{width:14,height:14}}/>Send {drafts.length} Application{drafts.length!==1?'s':''}</>}</button>
-      <button className="fte-cancel-btn" onClick={()=>onReject()} disabled={loading}><XCircle style={{width:13,height:13}}/>Cancel</button>
-    </div>
+    {readOnly
+      ? <div style={{display:'flex',alignItems:'center',gap:6,background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:10,padding:'8px 14px'}}><Send style={{width:14,height:14,color:'#3b82f6'}}/><span style={{color:'#1d4ed8',fontSize:'0.8rem',fontWeight:700}}>Sent — {drafts.length} application{drafts.length!==1?'s':''} were dispatched</span></div>
+      : <div style={{display:'flex',gap:8}}>
+          <button className="fte-send-email-btn" onClick={()=>onSend(approvalId,drafts)} disabled={loading||drafts.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="fte-spin"/>Sending...</>:<><Send style={{width:14,height:14}}/>Send {drafts.length} Application{drafts.length!==1?'s':''}</>}</button>
+          <button className="fte-cancel-btn" onClick={()=>onReject()} disabled={loading}><XCircle style={{width:13,height:13}}/>Cancel</button>
+        </div>
+    }
   </div>;
 }
 
@@ -332,24 +356,70 @@ function SendResults({results,onNewChat}) {
   </div>;
 }
 
-function HistorySidebar({open,onClose}) {
-  const [history,setHistory]=useState([]);const [loading,setLoading]=useState(false);
+function PrepQuestionsCard({prepResults}) {
+  const [expandedIdx,setExpandedIdx]=useState(0);
+  if(!prepResults?.length) return null;
+  const QSection=({title,color,items})=>{
+    if(!items?.length) return null;
+    return <div style={{marginBottom:10}}>
+      <div style={{fontSize:'0.72rem',fontWeight:800,color,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:6}}>{title}</div>
+      <ul style={{margin:0,paddingLeft:16,display:'flex',flexDirection:'column',gap:5}}>
+        {items.map((q,i)=><li key={i} style={{fontSize:'0.82rem',color:'#0f2d1e',fontWeight:500,lineHeight:1.45}}>{q.question||q}</li>)}
+      </ul>
+    </div>;
+  };
+  return <div style={{width:'100%'}}>
+    <div style={{fontSize:'0.78rem',fontWeight:800,color:'#8b5cf6',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>
+      <span style={{width:18,height:18,background:'#f3e8ff',borderRadius:6,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'0.7rem'}}>🎯</span>
+      Interview Prep Questions
+    </div>
+    {prepResults.map((result,idx)=><div key={idx} style={{background:'#faf5ff',border:'1px solid #e9d5ff',borderRadius:10,marginBottom:8,overflow:'hidden'}}>
+      <button onClick={()=>setExpandedIdx(expandedIdx===idx?-1:idx)} style={{width:'100%',background:'none',border:'none',padding:'10px 12px',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',fontFamily:'inherit'}}>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:1}}>
+          <span style={{fontSize:'0.83rem',fontWeight:800,color:'#5b21b6'}}>{result.company}</span>
+          {result.jobTitle&&<span style={{fontSize:'0.72rem',color:'#7c3aed',fontWeight:600}}>{result.jobTitle}</span>}
+        </div>
+        {expandedIdx===idx?<ChevronUp style={{width:14,height:14,color:'#8b5cf6',flexShrink:0}}/>:<ChevronDown style={{width:14,height:14,color:'#8b5cf6',flexShrink:0}}/>}
+      </button>
+      {expandedIdx===idx&&<div style={{padding:'0 12px 12px'}}>
+        {result.error
+          ?<p style={{fontSize:'0.8rem',color:'#dc2626',margin:0}}>Could not generate: {result.error}</p>
+          :<>
+            <QSection title="Technical" color="#2563eb" items={result.questions?.technical}/>
+            <QSection title="Behavioral" color="#059669" items={result.questions?.behavioral}/>
+            <QSection title="Situational" color="#d97706" items={result.questions?.situational}/>
+          </>
+        }
+      </div>}
+    </div>)}
+  </div>;
+}
+
+function HistorySidebar({open,onClose,onLoad}) {
+  const [history,setHistory]=useState([]);const [loading,setLoading]=useState(false);const [loadingKey,setLoadingKey]=useState(null);
   useEffect(()=>{if(!open)return;setLoading(true);fteApi.getHistory().then(res=>setHistory(res.data.history||[])).catch(()=>setHistory([])).finally(()=>setLoading(false));},[open]);
   const fmt=(iso)=>{if(!iso)return'';const d=new Date(iso);return d.toLocaleDateString('en-PK',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'});};
+  const handleOpen=async(s)=>{
+    if(loadingKey)return;
+    setLoadingKey(s.key);
+    try{const res=await fteApi.getHistorySession(s.key);onLoad&&onLoad(res.data.session);onClose();}
+    catch{toast.error('Could not load session');}
+    finally{setLoadingKey(null);}
+  };
   return <>
     {open&&<div className="fte-backdrop" onClick={onClose}/>}
     <div className={`fte-sidebar${open?' open':''}`}>
       <div className="fte-sidebar-header">
-        <div><div className="fte-sidebar-title">Session History</div><div className="fte-sidebar-sub">Past job application sessions</div></div>
+        <div><div className="fte-sidebar-title">Session History</div><div className="fte-sidebar-sub">Click a session to view it</div></div>
         <button className="fte-icon-btn" onClick={onClose}><X style={{width:15,height:15}}/></button>
       </div>
       <div className="fte-sidebar-list">
         {loading&&<div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 0',gap:8,color:'#3a7055',fontSize:'0.82rem',fontWeight:600}}><Loader2 style={{width:15,height:15}} className="fte-spin"/>Loading...</div>}
         {!loading&&history.length===0&&<div className="fte-sidebar-empty"><Clock style={{width:28,height:28,color:'#7dba9a'}}/><p>No history yet</p><small>Complete your first session!</small></div>}
-        {!loading&&history.map((s,idx)=><div key={idx} className="fte-session-card">
+        {!loading&&history.map((s,idx)=><div key={idx} className={`fte-session-card fte-session-card-clickable`} onClick={()=>handleOpen(s)}>
           <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:8}}>
             <div style={{minWidth:0}}><div className="fte-session-role">{s.role||'Unknown Role'}</div><div className="fte-session-loc"><MapPin style={{width:10,height:10}}/>{s.location||'—'}</div></div>
-            <span className={`fte-session-badge ${s.sentCount>0?'sent':'none'}`}>{s.sentCount>0?`${s.sentCount} sent`:'No sends'}</span>
+            <span className={`fte-session-badge ${s.sentCount>0?'sent':'none'}`}>{loadingKey===s.key?<Loader2 style={{width:10,height:10}} className="fte-spin"/>:s.sentCount>0?`${s.sentCount} sent`:'No sends'}</span>
           </div>
           <div style={{display:'flex',gap:12,fontSize:'0.7rem',color:'#3a7055',fontWeight:600,marginBottom:8}}>
             <span style={{display:'flex',alignItems:'center',gap:3}}><FileText style={{width:10,height:10}}/>{s.cvCount||0} CVs</span>
@@ -544,6 +614,8 @@ export default function FTEChat() {
   const [approvalLoading,setApprovalLoading]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
   const [profileOpen,setProfileOpen]=useState(false);
+  const [viewingHistory,setViewingHistory]=useState(null); // { role, location, completedAt } or null
+  const [historyMessages,setHistoryMessages]=useState([]);
   const messagesEndRef=useRef(null);const fileInputRef=useRef(null);const pollingRef=useRef(null);const textareaRef=useRef(null);
 
   useEffect(()=>{messagesEndRef.current?.scrollIntoView({behavior:'smooth'});},[messages]);
@@ -574,7 +646,9 @@ export default function FTEChat() {
       else if(s.state==='cv_review'&&s.cvResults?.length) addBotMessage('cv_approval',`${s.cvResults.length} tailored CVs tayyar!`,{cvResults:s.cvResults,cvReviewApprovalId:s.cvReviewApprovalId});
       else if(s.state==='finding_emails') addBotMessage('status','CVs approved! HR emails dhundh raha hoon...');
       else if(s.state==='email_review'){const v=(s.emailDrafts||[]).filter(d=>d.hrEmail);addBotMessage('email_approval',`${v.length} email drafts tayyar!`,{emailDrafts:s.emailDrafts||[],emailReviewApprovalId:s.emailReviewApprovalId});}
+      else if(s.state==='done'&&currentState==='preparing_interview'&&s.prepResults?.length) addBotMessage('prep_questions','Interview prep tayyar!',{prepResults:s.prepResults});
       else if(s.state==='done') addBotMessage('result','Applications send ho gayi!',{sendResults:s.sendResults});
+      else if(s.state==='preparing_interview') addBotMessage('status','Interview questions generate ho rahi hain...');
     }catch{}},2500);
     return()=>{if(pollingRef.current)clearInterval(pollingRef.current);};
   },[currentState,addBotMessage]);
@@ -601,14 +675,45 @@ export default function FTEChat() {
   const handleReject=async()=>{try{await fteApi.reset();setCurrentState('waiting_cv');addBotMessage('text','Cancel ho gaya. Dobara shuru karne ke liye CV upload karein.');}catch{toast.error('Cancel fail ho gaya');}};
   const handleFileChange=(e)=>{const f=e.target.files[0];if(f){setCvFile(f);setTimeout(()=>handleSend(''),100);}};
 
-  const isDisabled=sending||ASYNC_STATES.has(currentState);
+  const handleLoadHistory=useCallback((session)=>{
+    if(!session)return;
+    const converted=(session.messages||[]).map((m,i)=>({
+      id:`hist_${i}_${Date.now()}`,
+      role:m.role,
+      type:m.type||'text',
+      content:m.content,
+      data:m.data||null,
+      ts:m.ts?new Date(m.ts):new Date(),
+    }));
+    setHistoryMessages(converted);
+    setViewingHistory({role:session.role,location:session.location,completedAt:session.completedAt});
+  },[]);
+
+  const handleExitHistory=useCallback(()=>{setViewingHistory(null);setHistoryMessages([]);},[]);
+
+  const handleRestartFromHistory=useCallback(async()=>{
+    const role=viewingHistory?.role;const location=viewingHistory?.location;
+    setViewingHistory(null);setHistoryMessages([]);
+    // Reset to fresh state
+    try{
+      await fteApi.reset();setMessages([]);setCurrentState('waiting_cv');
+      setTimeout(()=>{
+        addBotMessage('text','Fresh start! Please upload your **CV (PDF)** to begin.');
+        if(role&&location){
+          setTimeout(()=>addBotMessage('text',`_Last session: **${role}** in **${location}**. After uploading your CV, I will search again automatically!_`),300);
+        }
+      },50);
+    }catch{toast.error('Reset failed');}
+  },[viewingHistory,addBotMessage]);
+
+  const isDisabled=sending||ASYNC_STATES.has(currentState)||!!viewingHistory;
   const meta=STATE_META[currentState]||STATE_META.waiting_cv;
   const isPulse=ASYNC_STATES.has(currentState);
 
   return <>
     <style>{STYLES}</style>
     <div className="fte-root">
-      <HistorySidebar open={historyOpen} onClose={()=>setHistoryOpen(false)}/>
+      <HistorySidebar open={historyOpen} onClose={()=>setHistoryOpen(false)} onLoad={handleLoadHistory}/>
       <ProfilePanel
         open={profileOpen}
         onClose={()=>setProfileOpen(false)}
@@ -641,18 +746,44 @@ export default function FTEChat() {
         </div>
       </header>
 
+      {viewingHistory&&(
+        <div className="fte-history-banner">
+          <span className="fte-history-banner-text">📂 {viewingHistory.role||'Session'}{viewingHistory.location?` · ${viewingHistory.location}`:''}</span>
+          <div style={{display:'flex',gap:6,flexShrink:0}}>
+            <button className="fte-history-banner-btn" onClick={handleRestartFromHistory} title="Start a new session (same role & city)">↩ New Search</button>
+            <button className="fte-history-banner-btn" onClick={handleExitHistory}>← Back</button>
+          </div>
+        </div>
+      )}
       <div className="fte-messages">
         <div className="fte-messages-inner">
-          {messages.length===0&&<div className="fte-empty"><div className="fte-empty-icon"><Bot style={{width:32,height:32,color:'white'}}/></div><h2>Digital FTE</h2><p>Aapka AI job application assistant — CV se lekar email tak sab kuch automatic</p></div>}
-          {messages.map(msg=>{
-            if(msg.role==='user') return <UserMessage key={msg.id}>{msg.content}</UserMessage>;
-            if(msg.type==='status') return <StatusMessage key={msg.id}>{msg.content}</StatusMessage>;
-            if(msg.type==='cv_approval'&&msg.data?.cvResults) return <BotMessage key={msg.id}><CVApprovalCards cvResults={msg.data.cvResults} approvalId={msg.data.cvReviewApprovalId} onApprove={handleApproveCVs} onReject={handleReject} loading={approvalLoading}/></BotMessage>;
-            if(msg.type==='email_approval'&&msg.data?.emailDrafts) return <BotMessage key={msg.id}><EmailApprovalCards emailDrafts={msg.data.emailDrafts} approvalId={msg.data.emailReviewApprovalId} onSend={handleSendEmails} onReject={handleReject} loading={approvalLoading}/></BotMessage>;
-            if(msg.type==='result'&&msg.data?.sendResults) return <BotMessage key={msg.id}><SendResults results={msg.data.sendResults} onNewChat={handleNewChat}/></BotMessage>;
-            return <BotMessage key={msg.id}><BotText text={msg.content}/></BotMessage>;
-          })}
-          {sending&&<BotMessage isLoading/>}
+          {viewingHistory?(
+            historyMessages.length===0
+              ?<div className="fte-empty"><div className="fte-empty-icon"><Bot style={{width:32,height:32,color:'white'}}/></div><h2>No messages</h2><p>This session has no conversation messages saved.</p></div>
+              :historyMessages.map(msg=>{
+                if(msg.role==='user') return <UserMessage key={msg.id}>{msg.content}</UserMessage>;
+                if(msg.type==='cv_approval'&&msg.data?.cvResults) return <BotMessage key={msg.id}><CVApprovalCards cvResults={msg.data.cvResults} approvalId={msg.data.cvReviewApprovalId} readOnly={true}/></BotMessage>;
+                if(msg.type==='email_approval'&&msg.data?.emailDrafts) return <BotMessage key={msg.id}><EmailApprovalCards emailDrafts={msg.data.emailDrafts} approvalId={msg.data.emailReviewApprovalId} readOnly={true}/></BotMessage>;
+                if(msg.type==='result'&&msg.data?.sendResults) return <BotMessage key={msg.id}><SendResults results={msg.data.sendResults}/></BotMessage>;
+                if(msg.type==='prep_questions'&&msg.data?.prepResults) return <BotMessage key={msg.id}><PrepQuestionsCard prepResults={msg.data.prepResults}/></BotMessage>;
+                if(msg.type==='status') return <StatusMessage key={msg.id}>{msg.content}</StatusMessage>;
+                return <BotMessage key={msg.id}><BotText text={msg.content}/></BotMessage>;
+              })
+          ):(
+            <>
+              {messages.length===0&&<div className="fte-empty"><div className="fte-empty-icon"><Bot style={{width:32,height:32,color:'white'}}/></div><h2>Digital FTE</h2><p>Aapka AI job application assistant — CV se lekar email tak sab kuch automatic</p></div>}
+              {messages.map(msg=>{
+                if(msg.role==='user') return <UserMessage key={msg.id}>{msg.content}</UserMessage>;
+                if(msg.type==='status') return <StatusMessage key={msg.id}>{msg.content}</StatusMessage>;
+                if(msg.type==='cv_approval'&&msg.data?.cvResults) return <BotMessage key={msg.id}><CVApprovalCards cvResults={msg.data.cvResults} approvalId={msg.data.cvReviewApprovalId} onApprove={handleApproveCVs} onReject={handleReject} loading={approvalLoading}/></BotMessage>;
+                if(msg.type==='email_approval'&&msg.data?.emailDrafts) return <BotMessage key={msg.id}><EmailApprovalCards emailDrafts={msg.data.emailDrafts} approvalId={msg.data.emailReviewApprovalId} onSend={handleSendEmails} onReject={handleReject} loading={approvalLoading}/></BotMessage>;
+                if(msg.type==='result'&&msg.data?.sendResults) return <BotMessage key={msg.id}><SendResults results={msg.data.sendResults} onNewChat={handleNewChat}/></BotMessage>;
+                if(msg.type==='prep_questions'&&msg.data?.prepResults) return <BotMessage key={msg.id}><PrepQuestionsCard prepResults={msg.data.prepResults}/></BotMessage>;
+                return <BotMessage key={msg.id}><BotText text={msg.content}/></BotMessage>;
+              })}
+              {sending&&<BotMessage isLoading/>}
+            </>
+          )}
           <div ref={messagesEndRef}/>
         </div>
       </div>
@@ -664,7 +795,7 @@ export default function FTEChat() {
             <input ref={fileInputRef} type="file" accept=".pdf" style={{display:'none'}} onChange={handleFileChange}/>
             <button onClick={()=>fileInputRef.current?.click()} disabled={isDisabled} className={`fte-attach-btn ${currentState==='waiting_cv'?'pulse':'idle'}`}><Paperclip style={{width:16,height:16}}/></button>
             <textarea ref={textareaRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKeyDown} disabled={isDisabled} className="fte-textarea" rows={1}
-              placeholder={currentState==='waiting_cv'?'CV upload karein ya yahan likhein...':currentState==='cv_uploaded'||currentState==='asking_location'?'Role aur city likhein — e.g. "Software Engineer Karachi"':ASYNC_STATES.has(currentState)?'Kaam ho raha hai, thodi der wait karein...':'Yahan likhein... (Enter = send, Shift+Enter = newline)'}/>
+              placeholder={viewingHistory?'Viewing history — click "Back to current chat" to resume':currentState==='waiting_cv'?'CV upload karein ya yahan likhein...':currentState==='cv_uploaded'||currentState==='asking_location'?'Role aur city likhein — e.g. "Software Engineer Karachi"':currentState==='preparing_interview'?'Interview questions generate ho rahi hain...':ASYNC_STATES.has(currentState)?'Kaam ho raha hai, thodi der wait karein...':'Yahan likhein... (Enter = send, Shift+Enter = newline)'}/>
             <button onClick={handleSend} disabled={isDisabled||(!input.trim()&&!cvFile)} className="fte-send-btn">{sending?<Loader2 style={{width:16,height:16}} className="fte-spin"/>:<Send style={{width:16,height:16}}/>}</button>
           </div>
           <p className="fte-input-hint">CV → Role + City → Jobs → CVs → Approve → Emails → Send</p>

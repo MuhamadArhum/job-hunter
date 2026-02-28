@@ -32,9 +32,14 @@ export const fteApi = {
     api.post('/fte/approve-emails', { approvalId, modifiedEmails }),
 
   /**
-   * Get past session history
+   * Get past session history list
    */
   getHistory: () => api.get('/fte/history'),
+
+  /**
+   * Get a specific history session with full messages
+   */
+  getHistorySession: (key) => api.get(`/fte/history/${key}`),
 
   /**
    * Reset and start over

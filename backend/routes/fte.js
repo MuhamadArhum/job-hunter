@@ -149,6 +149,25 @@ router.get('/history', authMiddleware, async (req, res) => {
 });
 
 /**
+ * GET /api/fte/history/:key
+ * Returns a specific history session with full conversation messages
+ */
+router.get('/history/:key', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { key } = req.params;
+    const session = await fteAgent.getHistorySession(userId, key);
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+    res.json({ success: true, session });
+  } catch (error) {
+    console.error('FTE history session error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * POST /api/fte/reset
  * Reset FTE state to start over
  */
@@ -158,7 +177,7 @@ router.post('/reset', authMiddleware, async (req, res) => {
     await fteAgent.resetUser(userId);
     res.json({
       success: true,
-      botMessage: 'Reset ho gaya! Apni CV upload karein.',
+      botMessage: 'Reset complete! Please upload your CV (PDF) to begin.',
       state: 'waiting_cv',
     });
   } catch (error) {
