@@ -62,4 +62,14 @@ export const fteApi = {
    * Check Ollama status + available models
    */
   ollamaStatus: () => api.get('/ollama/status'),
+
+  /**
+   * Get user settings
+   */
+  getSettings: () => api.get('/fte/settings'),
+
+  /**
+   * Save user settings (partial update)
+   */
+  saveSettings: (data) => api.put('/fte/settings', data),
 };

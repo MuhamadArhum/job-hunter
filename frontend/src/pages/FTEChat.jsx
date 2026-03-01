@@ -10,7 +10,8 @@ import {
   Building2, MapPin, Clock, TrendingUp,
   User, Key, Save, Edit3, Shield, Download,
   Sparkles, Zap, Brain, Activity, Search,
-  FileCheck, AtSign, Rocket, ArrowRight, AlertTriangle,
+  FileCheck, AtSign, Rocket, ArrowRight, AlertTriangle, Settings,
+  ToggleLeft, ToggleRight,
 } from 'lucide-react';
 
 const ASYNC_STATES = new Set(['searching', 'generating_cvs', 'finding_emails', 'sending', 'preparing_interview']);
@@ -474,6 +475,82 @@ const STYLES = `
   .t-log-msg { font-size: 0.72rem; font-weight: 500; color: var(--text-2); line-height: 1.5; flex: 1; word-break: break-word; }
   .t-log-time { font-size: 0.58rem; color: var(--text-3); flex-shrink: 0; font-family: 'JetBrains Mono', monospace; margin-top: 3px; opacity: 0.7; }
 
+  /* ══════════════ SETTINGS PANEL ══════════════ */
+  .t-settings {
+    position: fixed; top: 0; right: 0; height: 100%; width: 360px;
+    background: var(--bg-surface); border-left: 1px solid var(--border);
+    z-index: 60; display: flex; flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+    box-shadow: -16px 0 48px rgba(0,0,0,0.6);
+  }
+  .t-settings.open { transform: translateX(0); }
+  .t-settings-hdr { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .t-settings-title { color: var(--text-1); font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+
+  .t-stabs { display: flex; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .t-stab {
+    flex: 1; padding: 10px 4px; border: none; background: none; cursor: pointer;
+    font-size: 0.68rem; font-weight: 600; color: var(--text-3); font-family: inherit;
+    border-bottom: 2px solid transparent; transition: all 0.18s;
+  }
+  .t-stab.active { color: var(--text-accent); border-bottom-color: var(--accent); background: var(--accent-dim); }
+  .t-stab:hover:not(.active) { color: var(--text-2); }
+
+  .t-settings-body { flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 18px; scrollbar-width: thin; }
+
+  .t-sfield { display: flex; flex-direction: column; gap: 5px; }
+  .t-sfield-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .t-slabel { font-size: 0.61rem; font-weight: 700; color: var(--text-accent); text-transform: uppercase; letter-spacing: 0.08em; font-family: 'JetBrains Mono', monospace; }
+  .t-sdesc { font-size: 0.67rem; color: var(--text-3); margin-top: 1px; line-height: 1.4; }
+  .t-sinput {
+    width: 100%; background: var(--bg-raised); border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm); padding: 9px 12px; font-size: 0.84rem;
+    color: var(--text-1); outline: none; font-family: inherit; transition: all 0.15s;
+  }
+  .t-sinput:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-dim); }
+  .t-sinput::placeholder { color: var(--text-3); }
+  .t-stextarea { min-height: 80px; resize: vertical; }
+
+  .t-slider-wrap { display: flex; align-items: center; gap: 10px; }
+  .t-slider {
+    flex: 1; -webkit-appearance: none; height: 4px; border-radius: 2px;
+    background: var(--bg-active); outline: none; cursor: pointer;
+  }
+  .t-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 0 6px var(--accent-glow); }
+  .t-slider-val { font-size: 0.78rem; font-weight: 800; color: var(--text-accent); font-family: 'JetBrains Mono', monospace; min-width: 24px; text-align: right; }
+
+  .t-toggle { position: relative; display: flex; align-items: center; cursor: pointer; gap: 8px; }
+  .t-toggle-track { width: 38px; height: 22px; border-radius: 11px; background: var(--bg-active); border: 1px solid var(--border-md); transition: all 0.25s; position: relative; flex-shrink: 0; }
+  .t-toggle-track.on { background: var(--accent); border-color: var(--accent); }
+  .t-toggle-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-3); transition: all 0.25s; }
+  .t-toggle-track.on .t-toggle-thumb { left: 19px; background: white; }
+  .t-toggle-label { font-size: 0.78rem; font-weight: 600; color: var(--text-2); }
+
+  .t-sselect {
+    width: 100%; background: var(--bg-raised); border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm); padding: 9px 12px; font-size: 0.84rem;
+    color: var(--text-1); outline: none; font-family: inherit; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .t-sselect:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-dim); }
+
+  .t-ssave-btn {
+    width: 100%; background: linear-gradient(135deg, var(--accent), var(--violet));
+    color: white; font-weight: 700; font-size: 0.84rem; border: none;
+    border-radius: var(--radius-sm); padding: 11px; cursor: pointer;
+    font-family: inherit; box-shadow: 0 2px 12px var(--accent-glow);
+    transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;
+    margin-top: 4px;
+  }
+  .t-ssave-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 20px var(--accent-glow); }
+  .t-ssave-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .t-ssaved { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; font-size: 0.78rem; font-weight: 600; color: var(--success); background: var(--success-dim); border: 1px solid var(--success-border); border-radius: var(--radius-sm); }
+
+  .t-sdivider { height: 1px; background: var(--border); margin: 2px 0; }
+  .t-sgroup-title { font-size: 0.6rem; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; font-family: 'JetBrains Mono', monospace; }
+
   /* ══════════════ SIDEBARS ══════════════ */
   .t-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 40; backdrop-filter: blur(4px); }
 
@@ -778,6 +855,180 @@ function ActivityPanel({activityLog, currentState, isAsync}) {
         <div ref={bottomRef}/>
       </div>
     </div>
+  );
+}
+
+/* ─── Settings Panel ─────────────────────────────────────────────────────────── */
+const DEFAULT_SETTINGS_FE = {
+  maxJobs: 5, defaultRole: '', defaultCity: '', jobType: 'any',
+  emailSignature: '', ccMyself: false, emailLanguage: 'english',
+  minAtsScore: 0, autoApproveCvs: false, autoApproveAts: 80,
+};
+
+function Toggle({on, onToggle}) {
+  return (
+    <div className="t-toggle" onClick={onToggle}>
+      <div className={`t-toggle-track${on?' on':''}`}>
+        <div className="t-toggle-thumb"/>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPanel({open, onClose}) {
+  const [tab, setTab] = useState('job');
+  const [s, setS] = useState(DEFAULT_SETTINGS_FE);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    fteApi.getSettings().then(res => setS({...DEFAULT_SETTINGS_FE, ...res.data.settings})).catch(()=>{}).finally(()=>setLoading(false));
+  }, [open]);
+
+  const upd = (key, val) => { setS(prev => ({...prev, [key]: val})); setSaved(false); };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await fteApi.saveSettings(s);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch { toast.error('Settings save nahi hui'); }
+    finally { setSaving(false); }
+  };
+
+  const TABS = [
+    { id: 'job',      label: 'Job Prefs' },
+    { id: 'email',    label: 'Email' },
+    { id: 'pipeline', label: 'Pipeline' },
+  ];
+
+  return (
+    <>
+      {open && <div className="t-backdrop" onClick={onClose}/>}
+      <div className={`t-settings${open?' open':''}`}>
+        <div className="t-settings-hdr">
+          <div className="t-settings-title">
+            <Settings style={{width:15,height:15,color:'var(--text-accent)'}}/>
+            Settings
+          </div>
+          <button className="t-icon-btn" onClick={onClose}><X style={{width:15,height:15}}/></button>
+        </div>
+
+        <div className="t-stabs">
+          {TABS.map(t => (
+            <button key={t.id} className={`t-stab${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="t-settings-body">
+          {loading ? (
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 0',gap:8,color:'var(--text-3)',fontSize:'0.82rem'}}>
+              <Loader2 style={{width:15,height:15}} className="t-spin"/>Loading...
+            </div>
+          ) : tab === 'job' ? (
+            <>
+              <div className="t-sfield">
+                <label className="t-slabel">Default Role</label>
+                <p className="t-sdesc">Agar prompt mein role na batao, yeh use hoga</p>
+                <input className="t-sinput" value={s.defaultRole} onChange={e=>upd('defaultRole',e.target.value)} placeholder="e.g. Software Engineer"/>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Default City</label>
+                <p className="t-sdesc">Agar city na batao, yeh default hogi</p>
+                <input className="t-sinput" value={s.defaultCity} onChange={e=>upd('defaultCity',e.target.value)} placeholder="e.g. Karachi"/>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Max Jobs per Search</label>
+                <p className="t-sdesc">Ek search mein kitni jobs process hon (1–10). Prompt se override ho sakta hai.</p>
+                <div className="t-slider-wrap">
+                  <input type="range" className="t-slider" min={1} max={10} value={s.maxJobs} onChange={e=>upd('maxJobs',+e.target.value)}/>
+                  <span className="t-slider-val">{s.maxJobs}</span>
+                </div>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Job Type</label>
+                <select className="t-sselect" value={s.jobType} onChange={e=>upd('jobType',e.target.value)}>
+                  <option value="any">Any</option>
+                  <option value="remote">Remote</option>
+                  <option value="onsite">On-site</option>
+                  <option value="hybrid">Hybrid</option>
+                </select>
+              </div>
+            </>
+          ) : tab === 'email' ? (
+            <>
+              <div className="t-sfield">
+                <label className="t-slabel">Email Signature</label>
+                <p className="t-sdesc">Har email ke end mein yeh append hoga</p>
+                <textarea className={`t-sinput t-stextarea`} value={s.emailSignature} onChange={e=>upd('emailSignature',e.target.value)} placeholder="e.g. Best regards,&#10;Muhammad Ali&#10;+92-300-1234567"/>
+              </div>
+              <div className="t-sfield">
+                <div className="t-sfield-row">
+                  <div>
+                    <label className="t-slabel">CC Myself</label>
+                    <p className="t-sdesc">Apne aap ko bhi email ki copy milegi</p>
+                  </div>
+                  <Toggle on={s.ccMyself} onToggle={()=>upd('ccMyself',!s.ccMyself)}/>
+                </div>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Email Language</label>
+                <select className="t-sselect" value={s.emailLanguage} onChange={e=>upd('emailLanguage',e.target.value)}>
+                  <option value="english">English</option>
+                  <option value="urdu">Urdu</option>
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="t-sfield">
+                <label className="t-slabel">Min ATS Score Filter</label>
+                <p className="t-sdesc">Is se kam ATS score wali CVs automatically remove ho jaengi (0 = disabled)</p>
+                <div className="t-slider-wrap">
+                  <input type="range" className="t-slider" min={0} max={90} step={5} value={s.minAtsScore} onChange={e=>upd('minAtsScore',+e.target.value)}/>
+                  <span className="t-slider-val">{s.minAtsScore === 0 ? 'Off' : `${s.minAtsScore}%`}</span>
+                </div>
+              </div>
+              <div className="t-sdivider"/>
+              <p className="t-sgroup-title">Auto-Approve</p>
+              <div className="t-sfield">
+                <div className="t-sfield-row">
+                  <div>
+                    <label className="t-slabel">Auto-Approve CVs</label>
+                    <p className="t-sdesc">CVs automatically approve ho jaengi agar ATS threshold pass ho</p>
+                  </div>
+                  <Toggle on={s.autoApproveCvs} onToggle={()=>upd('autoApproveCvs',!s.autoApproveCvs)}/>
+                </div>
+              </div>
+              {s.autoApproveCvs && (
+                <div className="t-sfield">
+                  <label className="t-slabel">Auto-Approve ATS Threshold</label>
+                  <p className="t-sdesc">Is ATS% se upar wali CVs auto-approve hongi</p>
+                  <div className="t-slider-wrap">
+                    <input type="range" className="t-slider" min={50} max={95} step={5} value={s.autoApproveAts} onChange={e=>upd('autoApproveAts',+e.target.value)}/>
+                    <span className="t-slider-val">{s.autoApproveAts}%</span>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {saved ? (
+            <div className="t-ssaved"><CheckCircle style={{width:14,height:14}}/> Settings save ho gayi!</div>
+          ) : (
+            <button className="t-ssave-btn" onClick={save} disabled={saving}>
+              {saving ? <><Loader2 style={{width:13,height:13}} className="t-spin"/>Saving...</> : <><Save style={{width:13,height:13}}/>Save Settings</>}
+            </button>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1111,6 +1362,7 @@ export default function FTEChat() {
   const [approvalLoading,setApprovalLoading]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
   const [profileOpen,setProfileOpen]=useState(false);
+  const [settingsOpen,setSettingsOpen]=useState(false);
   const [viewingHistory,setViewingHistory]=useState(null);
   const [historyMessages,setHistoryMessages]=useState([]);
 
@@ -1260,6 +1512,7 @@ export default function FTEChat() {
     <div className="t-root">
       <HistorySidebar open={historyOpen} onClose={()=>setHistoryOpen(false)} onLoad={handleLoadHistory}/>
       <ProfilePanel open={profileOpen} onClose={()=>setProfileOpen(false)} user={user} onUpdateUser={updateUser} onLogout={logout}/>
+      <SettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/>
 
       {/* ══ HEADER ══ */}
       <header className="t-header">
@@ -1293,6 +1546,9 @@ export default function FTEChat() {
             </button>
           </div>
           {mode==='fte'&&<button className="t-btn" onClick={handleNewChat}><Plus style={{width:12,height:12}}/>New Chat</button>}
+          <button className="t-icon-btn" onClick={()=>setSettingsOpen(true)} title="Settings" style={{color:'var(--text-3)'}}>
+            <Settings style={{width:15,height:15}}/>
+          </button>
           <button className="t-avatar" onClick={()=>setProfileOpen(true)} title={user?.name||user?.email}>{initials}</button>
         </div>
       </header>

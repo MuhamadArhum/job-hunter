@@ -215,4 +215,38 @@ router.post('/reset', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/fte/settings
+ * Returns user's settings (with defaults merged)
+ */
+router.get('/settings', authMiddleware, async (req, res) => {
+  try {
+    const settings = await fteAgent.getUserSettings(req.user._id);
+    res.json({ success: true, settings });
+  } catch (error) {
+    console.error('FTE get-settings error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/fte/settings
+ * Update user settings
+ * Body: partial settings object
+ */
+router.put('/settings', authMiddleware, async (req, res) => {
+  try {
+    const allowed = ['maxJobs','defaultRole','defaultCity','jobType','emailSignature','ccMyself','emailLanguage','minAtsScore','autoApproveCvs','autoApproveAts'];
+    const updates = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+    const settings = await fteAgent.updateUserSettings(req.user._id, updates);
+    res.json({ success: true, settings });
+  } catch (error) {
+    console.error('FTE save-settings error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

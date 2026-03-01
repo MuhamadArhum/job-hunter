@@ -61,6 +61,22 @@ const DEFAULT_STATE = {
   activityLog: [],      // real-time agent activity for frontend panel
 };
 
+const DEFAULT_SETTINGS = {
+  // Job Preferences
+  maxJobs:        5,          // 1–10
+  defaultRole:    '',
+  defaultCity:    '',
+  jobType:        'any',      // 'any' | 'remote' | 'onsite' | 'hybrid'
+  // Email Settings
+  emailSignature: '',
+  ccMyself:       false,
+  emailLanguage:  'english',  // 'english' | 'urdu'
+  // Pipeline Settings
+  minAtsScore:    0,          // filter CVs below this ATS%
+  autoApproveCvs: false,
+  autoApproveAts: 80,
+};
+
 // ─── Memory helpers ────────────────────────────────────────────────────────────
 async function getState(userId) {
   const mem = await Memory.findOne({
@@ -107,6 +123,27 @@ async function resetState(userId) {
     { upsert: true, new: true }
   );
   return { ...DEFAULT_STATE };
+}
+
+async function getSettings(userId) {
+  const mem = await Memory.findOne({
+    userId,
+    memoryType: 'long_term',
+    category: 'preferences',
+    key: 'settings',
+  });
+  return { ...DEFAULT_SETTINGS, ...(mem?.value || {}) };
+}
+
+async function saveSettings(userId, updates) {
+  const current = await getSettings(userId);
+  const merged = { ...current, ...updates };
+  await Memory.findOneAndUpdate(
+    { userId, memoryType: 'long_term', category: 'preferences', key: 'settings' },
+    { userId, memoryType: 'long_term', category: 'preferences', key: 'settings', value: merged },
+    { upsert: true, new: true }
+  );
+  return merged;
 }
 
 // ─── Activity log helper ───────────────────────────────────────────────────────
@@ -168,6 +205,25 @@ function extractLocationFromText(text) {
   // Fallback: use entire message as location if short (for ASKING_LOCATION state)
   const trimmed = text.trim();
   if (trimmed.length > 0 && trimmed.length < 30) return trimmed;
+  return null;
+}
+
+// ─── Extract explicit job count from user message ─────────────────────────────
+function extractJobCountFromText(text) {
+  const patterns = [
+    /\b(\d+)\s*jobs?\b/i,
+    /\bsirf\s*(\d+)\b/i,
+    /\bfind\s*(?:me\s*)?(\d+)\b/i,
+    /\b(\d+)\s*results?\b/i,
+    /\b(\d+)\s*positions?\b/i,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m) {
+      const n = parseInt(m[1]);
+      if (n >= 1 && n <= 10) return n;
+    }
+  }
   return null;
 }
 
@@ -349,11 +405,12 @@ class FTEAgent {
 
     // ── Execute the action the LLM chose ─────────────────────────────────────
     if (action === 'search_jobs') {
-      const role     = brain.actionParams?.role     || fteState.lastRole;
-      const location = brain.actionParams?.location || fteState.lastLocation;
+      const settings = await getSettings(userId);
+      const role     = brain.actionParams?.role     || fteState.lastRole || settings.defaultRole;
+      const location = brain.actionParams?.location || fteState.lastLocation || settings.defaultCity;
+      const promptJobCount = extractJobCountFromText(text);
 
       if (!role || !location) {
-        // LLM said search but params missing — ask user
         const needRole = !role;
         await this.addToHistory(userId, await getState(userId), 'bot', reply);
         return {
@@ -369,7 +426,7 @@ class FTEAgent {
         lastRole: role, lastLocation: location,
         jobs: [], cvResults: [], emailDrafts: [], sendResults: [],
       });
-      this.runPipelineAsync(userId).catch(async err => {
+      this.runPipelineAsync(userId, promptJobCount).catch(async err => {
         console.error('[FTE] Pipeline crashed:', err);
         await pushActivity(userId, `❌ Pipeline crash: ${err.message}`, 'error');
         setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
@@ -695,10 +752,12 @@ class FTEAgent {
    * → creates cv_review approval for HITL
    * Fire-and-forget, state updated in MongoDB
    */
-  async runPipelineAsync(userId) {
+  async runPipelineAsync(userId, promptJobCount = null) {
     const fteState = await getState(userId);
-    logAgentActivity('fte', 'pipeline_started', { userId, role: fteState.role, location: fteState.location });
-    await pushActivity(userId, `🔍 Jobs dhundh raha hoon: "${fteState.role}" in "${fteState.location}"...`, 'info');
+    const settings = await getSettings(userId);
+    const maxJobs = Math.min(promptJobCount || settings.maxJobs || 5, 10);
+    logAgentActivity('fte', 'pipeline_started', { userId, role: fteState.role, location: fteState.location, maxJobs });
+    await pushActivity(userId, `🔍 Jobs dhundh raha hoon: "${fteState.role}" in "${fteState.location}" (max ${maxJobs})...`, 'info');
 
     // ── STEP 1: Search Jobs via Orchestrator → jobSearch agent ──────────────
     const searchOrchestrator = new OrchestratorAgent(userId);
@@ -731,8 +790,8 @@ class FTEAgent {
       return;
     }
 
-    // Limit to 5 jobs max for CV generation
-    const selectedJobs = jobs.slice(0, 5);
+    // Limit to maxJobs for CV generation
+    const selectedJobs = jobs.slice(0, maxJobs);
 
     if (selectedJobs.length === 0) {
       await pushActivity(userId, `⚠️ Koi job nahi mili "${fteState.role}" in "${fteState.location}"`, 'error');
@@ -835,7 +894,41 @@ class FTEAgent {
     await pushActivity(userId, '🖨️ Tailored PDF CVs generate ho rahi hain...', 'info');
     const cvResultsWithPdf = await generateCVPdfs(cvResults, userId);
     logAgentActivity('fte', 'pdfs_generated', { count: cvResultsWithPdf.filter(r => r.hasPdf).length });
-    await pushActivity(userId, `📄 ${cvResultsWithPdf.filter(r=>r.hasPdf).length} PDFs ready! Aapke approval ka intezaar...`, 'success');
+    await pushActivity(userId, `📄 ${cvResultsWithPdf.filter(r=>r.hasPdf).length} PDFs ready!`, 'success');
+
+    // Filter by minAtsScore if set
+    let filteredCVs = cvResultsWithPdf;
+    if (settings.minAtsScore > 0) {
+      filteredCVs = cvResultsWithPdf.filter(r => {
+        if (r.error || !r.cv) return false;
+        const score = r.atsScore?.overall ?? r.atsScore?.format ?? 0;
+        return score >= settings.minAtsScore;
+      });
+      if (filteredCVs.length < cvResultsWithPdf.length) {
+        await pushActivity(userId, `🔍 ATS filter (${settings.minAtsScore}%): ${filteredCVs.length} CVs pass, ${cvResultsWithPdf.length - filteredCVs.length} removed`, 'info');
+      }
+      if (!filteredCVs.length) filteredCVs = cvResultsWithPdf; // fallback: keep all if all filtered out
+    }
+
+    // Auto-approve if setting is on and all valid CVs meet threshold
+    if (settings.autoApproveCvs) {
+      const validCVs = filteredCVs.filter(r => r.cv && !r.error);
+      const allPass = validCVs.every(r => {
+        const score = r.atsScore?.overall ?? r.atsScore?.format ?? 0;
+        return score >= (settings.autoApproveAts || 80);
+      });
+      if (validCVs.length > 0 && allPass) {
+        await pushActivity(userId, `✅ Auto-approve: sab CVs ATS ${settings.autoApproveAts}%+ hain — HR emails dhundh raha hoon...`, 'success');
+        await setState(userId, { state: STATES.FINDING_EMAILS, cvResults: filteredCVs });
+        this.findEmailsAsync(userId).catch(async err => {
+          await pushActivity(userId, `❌ Email finding crash: ${err.message}`, 'error');
+          setState(userId, { state: STATES.CV_REVIEW, error: err.message }).catch(console.error);
+        });
+        return;
+      }
+    }
+
+    await pushActivity(userId, '⏳ Aapke approval ka intezaar hai...', 'info');
 
     // ── STEP 3: Create cv_review Approval ────────────────────────────────────
     const approval = await Approval.createPending({
@@ -858,18 +951,18 @@ class FTEAgent {
 
     await setState(userId, {
       state: STATES.CV_REVIEW,
-      cvResults: cvResultsWithPdf,
+      cvResults: filteredCVs,
       cvReviewApprovalId: approval.approvalId,
     });
 
     // Save to conversation history so reopened sessions show the CV cards
     const stateAfterCV = await getState(userId);
-    const validCVs = cvResultsWithPdf.filter(r => r.cv).length;
+    const validCVCount = filteredCVs.filter(r => r.cv).length;
     await this.addToHistory(
       userId, stateAfterCV, 'bot',
-      `${validCVs} tailored CV${validCVs !== 1 ? 's' : ''} are ready! Review and approve to continue.`,
+      `${validCVCount} tailored CV${validCVCount !== 1 ? 's' : ''} are ready! Review and approve to continue.`,
       'cv_approval',
-      { cvResults: cvResultsWithPdf, cvReviewApprovalId: approval.approvalId }
+      { cvResults: filteredCVs, cvReviewApprovalId: approval.approvalId }
     );
 
     logAgentActivity('fte', 'cv_review_ready', { approvalId: approval.approvalId });
@@ -1163,10 +1256,15 @@ class FTEAgent {
 
         await pushActivity(userId, `📤 Bhej raha hoon: ${draft.job?.company} → ${draft.hrEmail}`, 'info');
         console.log(`[FTE] Sending email to ${draft.hrEmail} for ${draft.job?.company}...`);
+        const settings = await getSettings(userId);
+        const finalBody = settings.emailSignature
+          ? `${emailBody}\n\n--\n${settings.emailSignature}`
+          : emailBody;
         const result = await emailService.sendApplicationEmail({
           to: draft.hrEmail,
+          cc: settings.ccMyself ? process.env.EMAIL_USER : undefined,
           subject: emailSubject,
-          body: emailBody,
+          body: finalBody,
           cvPath: draft.cvPath,
           userName,
           companyName: draft.job?.company,
@@ -1351,6 +1449,8 @@ class FTEAgent {
   getHistory(userId) { return getHistoryList(userId); }
   getHistorySession(userId, key) { return getHistorySession(userId, key); }
   resetUser(userId) { return resetState(userId); }
+  getUserSettings(userId) { return getSettings(userId); }
+  updateUserSettings(userId, updates) { return saveSettings(userId, updates); }
   async getCVPdfPath(userId, jobId) {
     const state = await getState(userId);
     const result = (state.cvResults || []).find(r => r.jobId === jobId);
