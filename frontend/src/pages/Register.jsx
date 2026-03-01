@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Lock, Eye, EyeOff, Bot, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, Sparkles, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const PERKS = [
@@ -33,92 +33,90 @@ const Register = () => {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
         .auth-reg-root * { font-family: 'Inter', system-ui, sans-serif; box-sizing: border-box; }
-        .auth-reg-root { min-height: 100vh; display: flex; background: #f1f5f9; }
+        .auth-reg-root { min-height: 100vh; display: flex; background: #05070f; }
 
-        /* Left panel — dark */
         .rg-left {
           display: none; width: 42%;
-          background: #0f172a;
+          background: #0b0e1a;
+          border-right: 1px solid rgba(255,255,255,0.06);
           flex-direction: column; justify-content: space-between;
           padding: 2.5rem 3rem; position: relative; overflow: hidden;
         }
         @media (min-width: 1024px) { .rg-left { display: flex; } }
 
-        .rg-glow { position: absolute; width: 450px; height: 450px; background: radial-gradient(circle, rgba(16,185,129,0.1) 0%, transparent 65%); border-radius: 50%; top: -80px; right: -80px; pointer-events: none; }
-        .rg-glow-2 { top: auto; right: auto; bottom: -100px; left: -80px; background: radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 65%); }
+        .rg-glow  { position: absolute; width: 450px; height: 450px; background: radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 65%); border-radius: 50%; top: -80px; right: -80px; pointer-events: none; }
+        .rg-glow2 { top: auto; right: auto; bottom: -100px; left: -80px; background: radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 65%); }
 
         .rg-brand { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
-        .rg-brand-icon { width: 40px; height: 40px; background: linear-gradient(135deg,#10b981,#059669); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px rgba(16,185,129,0.4), 0 4px 14px rgba(16,185,129,0.2); }
-        .rg-brand-name { color: #f0fdf4; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
-        .rg-brand-sub { color: #10b981; font-size: 0.68rem; margin-top: 1px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+        .rg-brand-icon { width: 40px; height: 40px; background: linear-gradient(135deg,#6366f1,#8b5cf6); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(99,102,241,0.3); }
+        .rg-brand-name { color: #f1f5f9; font-weight: 800; font-size: 1.05rem; letter-spacing: -0.02em; }
+        .rg-brand-badge { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.3); color: #a5b4fc; border-radius: 5px; padding: 2px 7px; text-transform: uppercase; }
 
         .rg-hero { position: relative; z-index: 1; }
         .rg-headline { color: #f8fafc; font-size: 1.9rem; font-weight: 800; line-height: 1.18; margin-bottom: 10px; letter-spacing: -0.03em; }
-        .rg-accent { background: linear-gradient(90deg,#10b981,#34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-        .rg-sub { color: #64748b; font-size: 0.83rem; line-height: 1.65; margin-bottom: 2rem; font-weight: 400; }
-
+        .rg-accent { background: linear-gradient(90deg,#6366f1,#a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .rg-sub { color: #475569; font-size: 0.83rem; line-height: 1.65; margin-bottom: 2rem; }
         .rg-perk { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-        .rg-perk-text { color: #94a3b8; font-size: 0.83rem; font-weight: 400; }
+        .rg-perk-text { color: #64748b; font-size: 0.83rem; }
+        .rg-footer { color: #1e293b; font-size: 0.68rem; position: relative; z-index: 1; }
 
-        .rg-footer { color: #334155; font-size: 0.68rem; position: relative; z-index: 1; font-weight: 500; }
-
-        /* Right */
-        .rg-right { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem 1.5rem; background: #f1f5f9; overflow-y: auto; }
+        .rg-right { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem 1.5rem; background: #05070f; overflow-y: auto; }
         .rg-card { width: 100%; max-width: 400px; }
 
         .rg-mobile-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 1.5rem; }
-        .rg-mobile-icon { width: 34px; height: 34px; background: linear-gradient(135deg,#10b981,#059669); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+        .rg-mobile-icon { width: 34px; height: 34px; background: linear-gradient(135deg,#6366f1,#8b5cf6); border-radius: 9px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 14px rgba(99,102,241,0.35); }
         @media (min-width: 1024px) { .rg-mobile-brand { display: none; } }
 
-        .rg-form-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 1.75rem; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
-        .rg-title { color: #0f172a; font-size: 1.45rem; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.02em; }
-        .rg-sub-link { color: #64748b; font-size: 0.83rem; margin: 0 0 1.25rem; font-weight: 400; }
-        .rg-sub-link a { color: #10b981; font-weight: 600; text-decoration: none; }
-        .rg-sub-link a:hover { text-decoration: underline; }
+        .rg-form-box { background: #0f1425; border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 1.75rem; box-shadow: 0 8px 40px rgba(0,0,0,0.5); }
+        .rg-title { color: #f1f5f9; font-size: 1.45rem; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.02em; }
+        .rg-sub-link { color: #475569; font-size: 0.83rem; margin: 0 0 1.25rem; }
+        .rg-sub-link a { color: #818cf8; font-weight: 600; text-decoration: none; }
+        .rg-sub-link a:hover { color: #a5b4fc; }
 
-        .rg-label { display: block; font-size: 0.67rem; font-weight: 700; color: #059669; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px; }
-        .rg-wrap { position: relative; }
-        .rg-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+        .rg-label { display: block; font-size: 0.62rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; font-family: 'JetBrains Mono', monospace; }
+        .rg-wrap  { position: relative; }
+        .rg-icon  { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #475569; }
         .rg-input {
-          width: 100%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
-          padding: 10px 44px; font-size: 0.875rem; color: #0f172a; outline: none;
-          transition: all 0.15s; font-family: inherit; font-weight: 400;
+          width: 100%; background: #141929; border: 1px solid rgba(255,255,255,0.09); border-radius: 10px;
+          padding: 10px 44px; font-size: 0.875rem; color: #f1f5f9; outline: none;
+          transition: all 0.15s; font-family: inherit;
         }
-        .rg-input::placeholder { color: #94a3b8; }
-        .rg-input:focus { border-color: #10b981; background: #fff; box-shadow: 0 0 0 3px rgba(16,185,129,0.08); }
-        .rg-input.err { border-color: #fca5a5; }
-        .rg-eye { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0; color: #94a3b8; transition: color 0.2s; }
-        .rg-eye:hover { color: #10b981; }
-        .rg-err { font-size: 0.71rem; color: #ef4444; margin-top: 4px; }
+        .rg-input::placeholder { color: #334155; }
+        .rg-input:focus { border-color: rgba(99,102,241,0.5); background: #1a2038; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+        .rg-input.err { border-color: rgba(239,68,68,0.5); }
+        .rg-eye { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0; color: #475569; transition: color 0.2s; }
+        .rg-eye:hover { color: #818cf8; }
+        .rg-err { font-size: 0.71rem; color: #f87171; margin-top: 4px; }
 
         .rg-btn {
-          width: 100%; background: linear-gradient(135deg,#10b981,#059669);
+          width: 100%; background: linear-gradient(135deg,#6366f1,#8b5cf6);
           color: #fff; font-weight: 700; font-family: inherit; font-size: 0.875rem;
           border: none; border-radius: 10px; padding: 11px;
           cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
-          box-shadow: 0 2px 10px rgba(16,185,129,0.3); transition: all 0.2s; margin-top: 4px;
+          box-shadow: 0 2px 14px rgba(99,102,241,0.35); transition: all 0.2s; margin-top: 4px;
         }
-        .rg-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(16,185,129,0.4); }
+        .rg-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 24px rgba(99,102,241,0.5); }
         .rg-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
         .rg-spin { animation: rgSpin 1s linear infinite; }
         @keyframes rgSpin { to { transform: rotate(360deg); } }
-        .rg-form-footer { margin-top: 1rem; text-align: center; color: #94a3b8; font-size: 0.67rem; line-height: 1.5; }
+        .rg-form-footer { margin-top: 1rem; text-align: center; color: #334155; font-size: 0.67rem; line-height: 1.5; }
         .rg-fields { display: flex; flex-direction: column; gap: 13px; }
-        .rg-divider { height: 1px; background: #f1f5f9; margin: 2px 0 6px; }
+        .rg-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 2px 0 12px; }
       `}</style>
 
       <div className="auth-reg-root">
 
         {/* Left — dark panel */}
         <div className="rg-left">
-          <div className="rg-glow" /><div className="rg-glow rg-glow-2" />
+          <div className="rg-glow" /><div className="rg-glow rg-glow2" />
           <div className="rg-brand">
-            <div className="rg-brand-icon"><Bot size={20} color="white" /></div>
-            <div>
+            <div className="rg-brand-icon"><Sparkles size={20} color="white" /></div>
+            <div style={{display:'flex',alignItems:'center',gap:7}}>
               <div className="rg-brand-name">Talvion AI</div>
-              <div className="rg-brand-sub">AI-powered engine</div>
+              <div className="rg-brand-badge">Beta</div>
             </div>
           </div>
 
@@ -127,7 +125,7 @@ const Register = () => {
             <p className="rg-sub">Create a free account and let your AI agent handle the entire job application process from start to finish.</p>
             {PERKS.map((perk, i) => (
               <div key={i} className="rg-perk">
-                <CheckCircle size={16} color="#10b981" style={{flexShrink:0}} />
+                <CheckCircle size={16} color="#818cf8" style={{flexShrink:0}} />
                 <span className="rg-perk-text">{perk}</span>
               </div>
             ))}
@@ -140,8 +138,8 @@ const Register = () => {
         <div className="rg-right">
           <div className="rg-card">
             <div className="rg-mobile-brand">
-              <div className="rg-mobile-icon"><Bot size={17} color="white" /></div>
-              <span style={{color:'#0f172a',fontWeight:700,fontSize:'1rem'}}>Talvion AI</span>
+              <div className="rg-mobile-icon"><Sparkles size={17} color="white" /></div>
+              <span style={{color:'#f1f5f9',fontWeight:800,fontSize:'1rem'}}>Talvion AI</span>
             </div>
 
             <div className="rg-form-box">

@@ -58,6 +58,7 @@ const DEFAULT_STATE = {
   candidateProfile: null,
   cvFilePath: null,
   history: [],          // conversation history — last 10 messages
+  activityLog: [],      // real-time agent activity for frontend panel
 };
 
 // ─── Memory helpers ────────────────────────────────────────────────────────────
@@ -106,6 +107,21 @@ async function resetState(userId) {
     { upsert: true, new: true }
   );
   return { ...DEFAULT_STATE };
+}
+
+// ─── Activity log helper ───────────────────────────────────────────────────────
+async function pushActivity(userId, message, type = 'info') {
+  try {
+    const current = await getState(userId);
+    const log = Array.isArray(current.activityLog) ? current.activityLog : [];
+    log.push({ id: Date.now() + Math.random(), message, type, ts: new Date().toISOString() });
+    // Keep last 80 items
+    if (log.length > 80) log.splice(0, log.length - 80);
+    await setState(userId, { activityLog: log });
+  } catch (e) {
+    // Non-critical — don't crash pipeline if activity log fails
+    console.warn('[FTE] pushActivity error:', e.message);
+  }
 }
 
 // ─── Known cities list (used by both intent detection and entity extraction) ──
@@ -228,6 +244,7 @@ class FTEAgent {
         sending:              'Sending emails...',
         preparing_interview:  'Generating interview questions, please wait...',
       };
+      await pushActivity(userId, `⚠️ Prompt ignore kiya — agent abhi busy hai: ${fteState.state}`, 'warn');
       return { botMessage: msgs[fteState.state] || 'Working on it...', state: fteState.state };
     }
 
@@ -238,6 +255,7 @@ class FTEAgent {
 
     // ── Pending HITL approvals → remind ─────────────────────────────────────
     if (fteState.state === STATES.CV_REVIEW) {
+      await pushActivity(userId, '⚠️ Action blocked — CVs pending aapke review ka intezaar hai', 'warn');
       return {
         botMessage: 'Your tailored CVs are ready! Review the cards below and click **Approve** or **Reject**.',
         state: fteState.state,
@@ -245,6 +263,7 @@ class FTEAgent {
       };
     }
     if (fteState.state === STATES.EMAIL_REVIEW) {
+      await pushActivity(userId, '⚠️ Action blocked — Email drafts pending aapke review ka intezaar hai', 'warn');
       return {
         botMessage: 'Email drafts are ready! Review them below and click **Send All** to proceed.',
         state: fteState.state,
@@ -350,8 +369,9 @@ class FTEAgent {
         lastRole: role, lastLocation: location,
         jobs: [], cvResults: [], emailDrafts: [], sendResults: [],
       });
-      this.runPipelineAsync(userId).catch(err => {
+      this.runPipelineAsync(userId).catch(async err => {
         console.error('[FTE] Pipeline crashed:', err);
+        await pushActivity(userId, `❌ Pipeline crash: ${err.message}`, 'error');
         setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
       });
       await this.addToHistory(userId, await getState(userId), 'bot', reply);
@@ -364,7 +384,8 @@ class FTEAgent {
         return { botMessage: reply, state: fteState.state };
       }
       await setState(userId, { state: STATES.GENERATING_CVS, cvResults: [] });
-      this.runCVGenerationAsync(userId).catch(err => {
+      this.runCVGenerationAsync(userId).catch(async err => {
+        await pushActivity(userId, `❌ CV generation crash: ${err.message}`, 'error');
         setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
       });
       await this.addToHistory(userId, await getState(userId), 'bot', reply);
@@ -385,7 +406,8 @@ class FTEAgent {
         return { botMessage: reply, state: fteState.state };
       }
       await setState(userId, { state: STATES.FINDING_EMAILS });
-      this.findEmailsAsync(userId).catch(err => {
+      this.findEmailsAsync(userId).catch(async err => {
+        await pushActivity(userId, `❌ Email finding crash: ${err.message}`, 'error');
         setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
       });
       await this.addToHistory(userId, await getState(userId), 'bot', reply);
@@ -394,8 +416,9 @@ class FTEAgent {
 
     if (action === 'prepare_interview') {
       await setState(userId, { state: STATES.PREPARING_INTERVIEW });
-      this.prepInterviewAsync(userId).catch(err => {
+      this.prepInterviewAsync(userId).catch(async err => {
         console.error('[FTE] prepInterviewAsync crashed:', err);
+        await pushActivity(userId, `❌ Interview prep crash: ${err.message}`, 'error');
         setState(userId, { state: STATES.DONE, error: err.message }).catch(console.error);
       });
       await this.addToHistory(userId, await getState(userId), 'bot', reply);
@@ -505,6 +528,7 @@ class FTEAgent {
    */
   async handleCVUpload(userId, file) {
     logAgentActivity('fte', 'cv_upload_started', { userId, filename: file.originalname });
+    await pushActivity(userId, `📄 CV mil gayi "${file.originalname}" — parse ho rahi hai...`, 'info');
     try {
       // Parse PDF
       const pdfBuffer = fs.readFileSync(file.path);
@@ -512,12 +536,14 @@ class FTEAgent {
       const resumeText = pdfData.text;
 
       if (!resumeText || resumeText.trim().length < 50) {
+        await pushActivity(userId, '❌ CV parse nahi ho saki — valid PDF chahiye', 'error');
         return {
           botMessage: 'Could not parse the CV. Please upload a valid PDF resume.',
           state: STATES.WAITING_CV,
         };
       }
 
+      await pushActivity(userId, '🤖 CV text extract ho gaya — AI se profile bana raha hoon...', 'info');
       // Extract structured profile via LLM
       const parsed = await ResumeBuilderChains.parseCV(resumeText, userId);
 
@@ -549,6 +575,7 @@ class FTEAgent {
         : Object.values(rawSkills).flat().length;
 
       logAgentActivity('fte', 'cv_uploaded', { userId, name, skillCount });
+      await pushActivity(userId, `✅ CV parse ho gayi! Naam: ${name} | ${skillCount} skills detect hue`, 'success');
 
       return {
         botMessage: `CV received! ✓ **${name}** — ${skillCount} skills detected.\n\nNow tell me in one message — **what role** and **which city** are you looking for?\n\n_(e.g. "Software Engineer Karachi" or "Data Analyst in Lahore")_`,
@@ -556,6 +583,7 @@ class FTEAgent {
       };
     } catch (err) {
       logAgentActivity('fte', 'cv_upload_error', { error: err.message });
+      await pushActivity(userId, `❌ CV parse error: ${err.message}`, 'error');
       return {
         botMessage: `Failed to parse CV: ${err.message}. Please try again with a valid PDF.`,
         state: STATES.WAITING_CV,
@@ -614,9 +642,10 @@ class FTEAgent {
     if (role && location) {
       // Both found — start search immediately
       await setState(userId, { state: STATES.SEARCHING, role, location, error: null });
-      this.runPipelineAsync(userId).catch(err => {
+      this.runPipelineAsync(userId).catch(async err => {
         logAgentActivity('fte', 'pipeline_error', { error: err.message });
         console.error('[FTE] Pipeline crashed:', err);
+        await pushActivity(userId, `❌ Pipeline crash: ${err.message}`, 'error');
         setState(userId, { state: STATES.READY, error: err.message }).catch(console.error);
       });
       return {
@@ -648,9 +677,10 @@ class FTEAgent {
     await setState(userId, { state: STATES.SEARCHING, location });
 
     // Fire and forget
-    this.runPipelineAsync(userId).catch(err => {
+    this.runPipelineAsync(userId).catch(async err => {
       logAgentActivity('fte', 'pipeline_error', { error: err.message });
       console.error('[FTE] Pipeline crashed:', err);
+      await pushActivity(userId, `❌ Pipeline crash: ${err.message}`, 'error');
       setState(userId, { state: STATES.CV_UPLOADED, error: err.message }).catch(console.error);
     });
 
@@ -668,6 +698,7 @@ class FTEAgent {
   async runPipelineAsync(userId) {
     const fteState = await getState(userId);
     logAgentActivity('fte', 'pipeline_started', { userId, role: fteState.role, location: fteState.location });
+    await pushActivity(userId, `🔍 Jobs dhundh raha hoon: "${fteState.role}" in "${fteState.location}"...`, 'info');
 
     // ── STEP 1: Search Jobs via Orchestrator → jobSearch agent ──────────────
     const searchOrchestrator = new OrchestratorAgent(userId);
@@ -688,8 +719,10 @@ class FTEAgent {
 
       jobs = searchResults[1]?.data?.jobs || [];
       logAgentActivity('fte', 'orchestrator_search_done', { count: jobs.length });
+      await pushActivity(userId, `✅ ${jobs.length} jobs mili "${fteState.role}" ke liye!`, 'success');
     } catch (err) {
       logAgentActivity('fte', 'search_error', { error: err.message });
+      await pushActivity(userId, `❌ Job search fail: ${err.message}`, 'error');
       await setState(userId, {
         state: STATES.READY,
         jobs: [],
@@ -702,6 +735,7 @@ class FTEAgent {
     const selectedJobs = jobs.slice(0, 5);
 
     if (selectedJobs.length === 0) {
+      await pushActivity(userId, `⚠️ Koi job nahi mili "${fteState.role}" in "${fteState.location}"`, 'error');
       await setState(userId, {
         state: STATES.READY,
         jobs: [],
@@ -710,6 +744,7 @@ class FTEAgent {
       return;
     }
 
+    await pushActivity(userId, `📝 ${selectedJobs.length} jobs select ki gayi — tailored CVs bana raha hoon...`, 'info');
     await setState(userId, { state: STATES.GENERATING_CVS, jobs: selectedJobs });
 
     // ── STEP 2: Generate Tailored CVs via Orchestrator → resumeBuilder agent ─
@@ -722,6 +757,7 @@ class FTEAgent {
 
     for (let i = 0; i < selectedJobs.length; i++) {
       const job = selectedJobs[i];
+      await pushActivity(userId, `📝 CV bana raha hoon [${i+1}/${selectedJobs.length}]: ${job.company} — ${job.title}`, 'info');
       try {
         const cvTaskResults = await cvOrchestrator.executeTasks([{
           id: i + 1,
@@ -761,6 +797,10 @@ class FTEAgent {
           languages:      sections.languages || [],
         };
 
+        const ats = cvData?.atsScore || raw.atsScore || null;
+        const atsStr = ats?.overall ? ` — ATS: ${ats.overall}%` : '';
+        await pushActivity(userId, `✅ CV ready: ${job.company}${atsStr}`, 'success');
+
         cvResults.push({
           jobId: job._id?.toString() || job.id || String(Math.random()),
           job: {
@@ -772,12 +812,13 @@ class FTEAgent {
             salary:      job.salary || null,
           },
           cv:              normalizedCV,
-          atsScore:        cvData?.atsScore || raw.atsScore || null,
+          atsScore:        ats,
           recommendations: cvData?.recommendations || raw.suggestions || [],
           matchedKeywords: raw.matchedKeywords || [],
         });
       } catch (err) {
         logAgentActivity('fte', 'cv_generation_error', { job: job.title, error: err.message });
+        await pushActivity(userId, `❌ CV failed: ${job.company} — ${err.message}`, 'error');
         cvResults.push({
           jobId: job._id?.toString() || String(Math.random()),
           job: { title: job.title, company: job.company, location: job.location, sourceUrl: job.sourceUrl || null },
@@ -791,8 +832,10 @@ class FTEAgent {
     logAgentActivity('fte', 'cvs_generated', { count: cvResults.length });
 
     // ── STEP 2b: Generate tailored PDF for each CV ────────────────────────────
+    await pushActivity(userId, '🖨️ Tailored PDF CVs generate ho rahi hain...', 'info');
     const cvResultsWithPdf = await generateCVPdfs(cvResults, userId);
     logAgentActivity('fte', 'pdfs_generated', { count: cvResultsWithPdf.filter(r => r.hasPdf).length });
+    await pushActivity(userId, `📄 ${cvResultsWithPdf.filter(r=>r.hasPdf).length} PDFs ready! Aapke approval ka intezaar...`, 'success');
 
     // ── STEP 3: Create cv_review Approval ────────────────────────────────────
     const approval = await Approval.createPending({
@@ -853,9 +896,10 @@ class FTEAgent {
     await setState(userId, { state: STATES.FINDING_EMAILS, cvResults });
 
     // Fire and forget
-    this.findEmailsAsync(userId).catch(err => {
+    this.findEmailsAsync(userId).catch(async err => {
       logAgentActivity('fte', 'email_find_error', { error: err.message });
       console.error('[FTE] findEmailsAsync crashed:', err);
+      await pushActivity(userId, `❌ Email finding crash: ${err.message}`, 'error');
       setState(userId, { state: STATES.CV_REVIEW, error: err.message }).catch(console.error);
     });
 
@@ -871,6 +915,7 @@ class FTEAgent {
     const { cvResults, candidateProfile, cvFilePath, role } = fteState;
 
     logAgentActivity('fte', 'finding_emails', { count: cvResults.length });
+    await pushActivity(userId, `📧 HR emails dhundh raha hoon ${cvResults.filter(r=>r.cv).length} companies ke liye...`, 'info');
 
     // Initialize Orchestrator for email drafting
     const emailOrchestrator = new OrchestratorAgent(userId);
@@ -882,6 +927,7 @@ class FTEAgent {
       const cvResult = cvResults[i];
       if (!cvResult.cv) continue; // skip failed CVs
       const { job } = cvResult;
+      await pushActivity(userId, `🔎 HR email dhundh raha hoon: ${job.company}...`, 'info');
       try {
         const { findHREmail } = require('../../services/hunterService');
         const siteUrl = job.companyApplyUrl || job.sourceUrl || null;
@@ -905,6 +951,7 @@ class FTEAgent {
               verifyResult: emailVerifyResult,
               domain: hunterResult.domain,
             });
+            await pushActivity(userId, `✅ Email mila [Hunter.io]: ${job.company} → ${hrEmail}${emailVerified?' ✓':' ?'}`, 'success');
           } else {
             logAgentActivity('fte', 'hunter_email_not_found', { company: job.company, domain: hunterResult.domain });
           }
@@ -914,13 +961,17 @@ class FTEAgent {
 
         // ── STEP 2: LLM fallback — only if Hunter.io found nothing ───────────
         if (!hrEmail) {
+          await pushActivity(userId, `🤖 Hunter.io se nahi mila — AI se estimate kar raha hoon: ${job.company}...`, 'info');
           try {
             const websiteHint = siteUrl || null;
             const emailResult = await ApplyChains.findEmails(job.company, websiteHint, null, userId);
             const emails = emailResult?.emails || [];
             const best = emails.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
             hrEmail = best?.email || null;
-            if (hrEmail) emailSource = 'llm';
+            if (hrEmail) {
+              emailSource = 'llm';
+              await pushActivity(userId, `~ Email estimated [AI]: ${job.company} → ${hrEmail}`, 'info');
+            }
             logAgentActivity('fte', 'llm_email_fallback', {
               company: job.company, email: hrEmail, candidates: emails.length,
             });
@@ -931,6 +982,7 @@ class FTEAgent {
 
         if (!hrEmail) {
           logAgentActivity('fte', 'email_not_found', { company: job.company });
+          await pushActivity(userId, `⚠️ ${job.company} ka HR email nahi mila — skip kar raha hoon`, 'error');
           emailDrafts.push({
             jobId: cvResult.jobId,
             job,
@@ -945,6 +997,7 @@ class FTEAgent {
         }
 
         // ── Draft email via Orchestrator → apply agent ──────────────────────
+        await pushActivity(userId, `✉️ Email draft bana raha hoon: ${job.company}...`, 'info');
         const emailTaskResults = await emailOrchestrator.executeTasks([{
           id: i + 1,
           agent: 'apply',
@@ -976,6 +1029,7 @@ class FTEAgent {
         });
       } catch (err) {
         logAgentActivity('fte', 'draft_error', { company: job.company, error: err.message });
+        await pushActivity(userId, `❌ Email draft fail: ${job.company} — ${err.message}`, 'error');
         emailDrafts.push({
           jobId: cvResult.jobId,
           job,
@@ -990,6 +1044,7 @@ class FTEAgent {
     }
 
     logAgentActivity('fte', 'emails_drafted', { count: emailDrafts.length });
+    await pushActivity(userId, `📬 ${emailDrafts.filter(d=>d.hrEmail).length} email drafts tayyar! Aapke review ka intezaar...`, 'success');
 
     // Create email_send Approval
     const approval = await Approval.createPending({
@@ -1045,9 +1100,10 @@ class FTEAgent {
     await setState(userId, { state: STATES.SENDING });
 
     // Fire and forget
-    this.sendEmailsAsync(userId, emailsToSend).catch(err => {
+    this.sendEmailsAsync(userId, emailsToSend).catch(async err => {
       logAgentActivity('fte', 'send_error', { error: err.message });
       console.error('[FTE] sendEmailsAsync crashed:', err);
+      await pushActivity(userId, `❌ Email send crash: ${err.message}`, 'error');
       setState(userId, { state: STATES.EMAIL_REVIEW, error: err.message }).catch(console.error);
     });
 
@@ -1063,18 +1119,21 @@ class FTEAgent {
     const userName = candidateProfile?.contactInfo?.name || 'Applicant';
 
     logAgentActivity('fte', 'sending_emails', { count: emailDrafts.length });
+    await pushActivity(userId, `📤 ${emailDrafts.filter(d=>d.hrEmail).length} emails bhej raha hoon — SMTP verify kar raha hoon...`, 'info');
 
     // Verify SMTP connection before attempting sends
     const smtpOk = await emailService.verifyConnection();
     if (!smtpOk) {
       console.error('[FTE] SMTP connection FAILED. Check EMAIL_USER and EMAIL_PASS in .env');
       console.error(`[FTE] EMAIL_USER=${process.env.EMAIL_USER}, EMAIL_HOST=${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
+      await pushActivity(userId, '❌ Gmail SMTP connection fail — EMAIL_USER/EMAIL_PASS check karein', 'error');
       await setState(userId, {
         state: STATES.DONE,
         sendResults: [{ success: false, error: 'Gmail SMTP connection failed. Check EMAIL_USER and EMAIL_PASS in .env (must be a Gmail App Password).' }],
       });
       return;
     }
+    await pushActivity(userId, '✅ SMTP ready — emails bhej raha hoon...', 'success');
     console.log('[FTE] SMTP connection verified. Starting email sends...');
 
     const sendResults = [];
@@ -1102,6 +1161,7 @@ class FTEAgent {
           continue;
         }
 
+        await pushActivity(userId, `📤 Bhej raha hoon: ${draft.job?.company} → ${draft.hrEmail}`, 'info');
         console.log(`[FTE] Sending email to ${draft.hrEmail} for ${draft.job?.company}...`);
         const result = await emailService.sendApplicationEmail({
           to: draft.hrEmail,
@@ -1162,10 +1222,12 @@ class FTEAgent {
         });
 
         logAgentActivity('fte', 'email_sent', { company: draft.job?.company, to: draft.hrEmail });
+        await pushActivity(userId, `✅ Sent: ${draft.job?.company} (${draft.hrEmail})`, 'success');
       } catch (err) {
         console.error(`[FTE] Email send FAILED for ${draft.job?.company} → ${draft.hrEmail}:`, err.message);
         if (err.code) console.error(`[FTE] SMTP error code: ${err.code}, response: ${err.response || err.responseCode}`);
         logAgentActivity('fte', 'email_send_failed', { company: draft.job?.company, error: err.message, code: err.code });
+        await pushActivity(userId, `❌ Failed: ${draft.job?.company} — ${err.message}`, 'error');
         sendResults.push({
           jobId: draft.jobId,
           company: draft.job?.company,
@@ -1178,6 +1240,7 @@ class FTEAgent {
     }
 
     const successCount = sendResults.filter(r => r.success).length;
+    await pushActivity(userId, `🎉 Done! ${successCount} applications sent, ${sendResults.length - successCount} failed`, successCount > 0 ? 'success' : 'error');
 
     await setState(userId, {
       state: STATES.DONE,
