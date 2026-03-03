@@ -1025,26 +1025,38 @@ class FTEAgent {
         const { findHREmail } = require('../../services/hunterService');
         const siteUrl = job.companyApplyUrl || job.sourceUrl || null;
 
-        // ── STEP 1: Hunter.io — real verified emails ──────────────────────────
-        let hrEmail    = null;
+        // ── STEP 1: Hunter.io — HR first, then executive fallback ─────────────
+        let hrEmail         = null;   // primary email (first/best)
+        let hrEmails        = [];     // ALL found emails (send to all)
         let emailSource     = 'none';
         let emailVerified   = false;
         let emailVerifyResult = null;
+        let emailType       = 'none';
+
         try {
           const hunterResult = await findHREmail(job.company, siteUrl);
           if (hunterResult.email) {
             hrEmail           = hunterResult.email;
+            hrEmails          = hunterResult.emails && hunterResult.emails.length > 0
+              ? hunterResult.emails
+              : [hunterResult.email];
             emailSource       = 'hunter';
             emailVerified     = hunterResult.verified || false;
             emailVerifyResult = hunterResult.verifyResult || 'unknown';
+            emailType         = hunterResult.emailType || 'hr';
+
+            const typeLabel = emailType === 'exec' ? 'Executive' : 'HR';
+            const multiLabel = hrEmails.length > 1 ? ` (+${hrEmails.length - 1} more)` : '';
             logAgentActivity('fte', 'hunter_email_found', {
-              company: job.company,
-              email: hrEmail,
-              verified: emailVerified,
-              verifyResult: emailVerifyResult,
-              domain: hunterResult.domain,
+              company: job.company, email: hrEmail, type: emailType,
+              count: hrEmails.length, verified: emailVerified,
+              verifyResult: emailVerifyResult, domain: hunterResult.domain,
             });
-            await pushActivity(userId, `✅ Email mila [Hunter.io]: ${job.company} → ${hrEmail}${emailVerified?' ✓':' ?'}`, 'success');
+            await pushActivity(
+              userId,
+              `✅ ${typeLabel} email mila [Hunter.io]: ${job.company} → ${hrEmail}${multiLabel}${emailVerified?' ✓':' ?'}`,
+              'success'
+            );
           } else {
             logAgentActivity('fte', 'hunter_email_not_found', { company: job.company, domain: hunterResult.domain });
           }
@@ -1060,7 +1072,8 @@ class FTEAgent {
             const emailResult = await ApplyChains.findEmails(job.company, websiteHint, null, userId);
             const emails = emailResult?.emails || [];
             const best = emails.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
-            hrEmail = best?.email || null;
+            hrEmail  = best?.email || null;
+            hrEmails = hrEmail ? [hrEmail] : [];
             if (hrEmail) {
               emailSource = 'llm';
               await pushActivity(userId, `~ Email estimated [AI]: ${job.company} → ${hrEmail}`, 'info');
@@ -1075,16 +1088,17 @@ class FTEAgent {
 
         if (!hrEmail) {
           logAgentActivity('fte', 'email_not_found', { company: job.company });
-          await pushActivity(userId, `⚠️ ${job.company} ka HR email nahi mila — skip kar raha hoon`, 'error');
+          await pushActivity(userId, `⚠️ ${job.company} ka koi bhi email nahi mila — skip kar raha hoon`, 'error');
           emailDrafts.push({
             jobId: cvResult.jobId,
             job,
             hrEmail: null,
+            hrEmails: [],
             subject: null,
             body: null,
             cvPath: cvResult.cvPdfPath || cvFilePath,
             atsScore: cvResult.atsScore,
-            error: 'Could not find HR email for this company',
+            error: 'Could not find any email (HR or executive) for this company',
           });
           continue;
         }
@@ -1111,13 +1125,15 @@ class FTEAgent {
         emailDrafts.push({
           jobId: cvResult.jobId,
           job,
-          hrEmail,
-          emailSource,       // 'hunter' | 'llm' | 'none'
-          emailVerified,     // true if Hunter.io confirmed deliverable
-          emailVerifyResult, // 'deliverable' | 'risky' | 'unknown'
+          hrEmail,                   // primary email (for UI display + backward compat)
+          hrEmails,                  // all emails — send to ALL of them
+          emailType,                 // 'hr' | 'exec' | 'none'
+          emailSource,               // 'hunter' | 'llm' | 'none'
+          emailVerified,             // true if Hunter.io confirmed deliverable
+          emailVerifyResult,         // 'deliverable' | 'risky' | 'unknown'
           subject: draft?.subject || `Application for ${job.title} — ${candidateName}`,
           body: draft?.body || draft?.emailBody || draft?.content || null,
-          cvPath: cvResult.cvPdfPath || cvFilePath,  // use tailored PDF, fall back to original
+          cvPath: cvResult.cvPdfPath || cvFilePath,
           atsScore: cvResult.atsScore,
         });
       } catch (err) {
@@ -1127,6 +1143,7 @@ class FTEAgent {
           jobId: cvResult.jobId,
           job,
           hrEmail: null,
+          hrEmails: [],
           subject: null,
           body: null,
           cvPath: cvResult.cvPdfPath || cvFilePath,
@@ -1239,41 +1256,66 @@ class FTEAgent {
           company: draft.job?.company,
           jobTitle: draft.job?.title,
           hrEmail: null,
+          hrEmails: [],
           success: false,
-          error: draft.error || 'HR email not found',
+          error: draft.error || 'Email not found',
         });
         continue;
       }
 
-      try {
-        const emailBody = draft.body;
-        const emailSubject = draft.subject || `Application for ${draft.job?.title || 'Position'} — ${userName}`;
+      // Build list of recipient emails (hrEmails array, fallback to single hrEmail)
+      const recipientEmails = (draft.hrEmails && draft.hrEmails.length > 0)
+        ? [...new Set(draft.hrEmails)]
+        : [draft.hrEmail];
 
-        if (!emailBody) {
-          sendResults.push({ jobId: draft.jobId, company: draft.job?.company, success: false, error: 'Email body missing — LLM draft failed' });
-          continue;
-        }
+      const emailBody    = draft.body;
+      const emailSubject = draft.subject || `Application for ${draft.job?.title || 'Position'} — ${userName}`;
 
-        await pushActivity(userId, `📤 Bhej raha hoon: ${draft.job?.company} → ${draft.hrEmail}`, 'info');
-        console.log(`[FTE] Sending email to ${draft.hrEmail} for ${draft.job?.company}...`);
-        const settings = await getSettings(userId);
-        const finalBody = settings.emailSignature
-          ? `${emailBody}\n\n--\n${settings.emailSignature}`
-          : emailBody;
-        const result = await emailService.sendApplicationEmail({
-          to: draft.hrEmail,
-          cc: settings.ccMyself ? process.env.EMAIL_USER : undefined,
-          subject: emailSubject,
-          body: finalBody,
-          cvPath: draft.cvPath,
-          userName,
-          companyName: draft.job?.company,
-        });
+      if (!emailBody) {
+        sendResults.push({ jobId: draft.jobId, company: draft.job?.company, success: false, hrEmails: recipientEmails, error: 'Email body missing — LLM draft failed' });
+        continue;
+      }
 
-        // Save Job to DB if not already saved (for Application record)
-        let savedJob;
+      const settings   = await getSettings(userId);
+      const finalBody  = settings.emailSignature
+        ? `${emailBody}\n\n--\n${settings.emailSignature}`
+        : emailBody;
+
+      // ── Send to EACH recipient email ─────────────────────────────────────
+      const perEmailResults = [];
+      for (const recipientEmail of recipientEmails) {
         try {
-          savedJob = await Job.findOneAndUpdate(
+          await pushActivity(userId, `📤 Bhej raha hoon: ${draft.job?.company} → ${recipientEmail}`, 'info');
+          console.log(`[FTE] Sending email to ${recipientEmail} for ${draft.job?.company}...`);
+
+          const result = await emailService.sendApplicationEmail({
+            to: recipientEmail,
+            cc: settings.ccMyself ? process.env.EMAIL_USER : undefined,
+            subject: emailSubject,
+            body: finalBody,
+            cvPath: draft.cvPath,
+            userName,
+            companyName: draft.job?.company,
+          });
+
+          perEmailResults.push({ email: recipientEmail, success: true, messageId: result.messageId });
+          logAgentActivity('fte', 'email_sent', { company: draft.job?.company, to: recipientEmail });
+          await pushActivity(userId, `✅ Sent: ${draft.job?.company} → ${recipientEmail}`, 'success');
+        } catch (err) {
+          console.error(`[FTE] Email send FAILED for ${draft.job?.company} → ${recipientEmail}:`, err.message);
+          if (err.code) console.error(`[FTE] SMTP error code: ${err.code}, response: ${err.response || err.responseCode}`);
+          logAgentActivity('fte', 'email_send_failed', { company: draft.job?.company, to: recipientEmail, error: err.message, code: err.code });
+          await pushActivity(userId, `❌ Failed: ${draft.job?.company} → ${recipientEmail} — ${err.message}`, 'error');
+          perEmailResults.push({ email: recipientEmail, success: false, error: err.message });
+        }
+      }
+
+      const anySuccess = perEmailResults.some(r => r.success);
+
+      // Save Job + Application record once (regardless of how many recipients)
+      if (anySuccess) {
+        try {
+          const savedJob = await Job.findOneAndUpdate(
             { userId, title: draft.job.title, company: draft.job.company },
             {
               userId,
@@ -1287,54 +1329,29 @@ class FTEAgent {
             },
             { upsert: true, new: true }
           );
-        } catch (e) {
-          savedJob = null;
-        }
-
-        // Create Application record
-        if (savedJob) {
-          try {
+          if (savedJob) {
             await Application.findOneAndUpdate(
               { userId, jobId: savedJob._id },
-              {
-                userId,
-                jobId: savedJob._id,
-                coverLetter: draft.body,
-                status: 'sent',
-                sentAt: new Date(),
-              },
+              { userId, jobId: savedJob._id, coverLetter: draft.body, status: 'sent', sentAt: new Date() },
               { upsert: true }
             );
-          } catch (e) {
-            logAgentActivity('fte', 'application_save_error', { error: e.message });
           }
+        } catch (e) {
+          logAgentActivity('fte', 'application_save_error', { error: e.message });
         }
-
-        sendResults.push({
-          jobId: draft.jobId,
-          company: draft.job?.company,
-          jobTitle: draft.job?.title,
-          hrEmail: draft.hrEmail,
-          success: true,
-          messageId: result.messageId,
-        });
-
-        logAgentActivity('fte', 'email_sent', { company: draft.job?.company, to: draft.hrEmail });
-        await pushActivity(userId, `✅ Sent: ${draft.job?.company} (${draft.hrEmail})`, 'success');
-      } catch (err) {
-        console.error(`[FTE] Email send FAILED for ${draft.job?.company} → ${draft.hrEmail}:`, err.message);
-        if (err.code) console.error(`[FTE] SMTP error code: ${err.code}, response: ${err.response || err.responseCode}`);
-        logAgentActivity('fte', 'email_send_failed', { company: draft.job?.company, error: err.message, code: err.code });
-        await pushActivity(userId, `❌ Failed: ${draft.job?.company} — ${err.message}`, 'error');
-        sendResults.push({
-          jobId: draft.jobId,
-          company: draft.job?.company,
-          jobTitle: draft.job?.title,
-          hrEmail: draft.hrEmail,
-          success: false,
-          error: err.message,
-        });
       }
+
+      sendResults.push({
+        jobId: draft.jobId,
+        company: draft.job?.company,
+        jobTitle: draft.job?.title,
+        hrEmail: draft.hrEmail,
+        hrEmails: recipientEmails,
+        emailType: draft.emailType || 'hr',
+        success: anySuccess,
+        perEmailResults,
+        error: anySuccess ? null : perEmailResults.map(r => r.error).join('; '),
+      });
     }
 
     const successCount = sendResults.filter(r => r.success).length;

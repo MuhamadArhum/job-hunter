@@ -11,7 +11,7 @@ import {
   User, Key, Save, Edit3, Shield, Download,
   Sparkles, Zap, Brain, Activity, Search,
   FileCheck, AtSign, Rocket, ArrowRight, AlertTriangle, Settings,
-  ToggleLeft, ToggleRight,
+  ToggleLeft, ToggleRight, Sun, Moon, Palette, Users,
 } from 'lucide-react';
 
 const ASYNC_STATES = new Set(['searching', 'generating_cvs', 'finding_emails', 'sending', 'preparing_interview']);
@@ -35,18 +35,18 @@ const STATE_STEP_MAP = {
 };
 
 const STATE_META = {
-  waiting_cv:          { label: 'Upload CV',               color: '#6366f1' },
-  cv_uploaded:         { label: 'Ready',                   color: '#10b981' },
-  ready:               { label: 'Ready',                   color: '#10b981' },
-  asking_location:     { label: 'Enter City',              color: '#6366f1' },
-  searching:           { label: 'Searching Jobs...',       color: '#f59e0b' },
-  generating_cvs:      { label: 'Generating CVs...',       color: '#f59e0b' },
-  cv_review:           { label: 'Review CVs',              color: '#8b5cf6' },
-  finding_emails:      { label: 'Finding Emails...',       color: '#f59e0b' },
-  email_review:        { label: 'Review Emails',           color: '#ec4899' },
-  sending:             { label: 'Sending...',              color: '#f59e0b' },
-  preparing_interview: { label: 'Prep Interview...',       color: '#8b5cf6' },
-  done:                { label: 'Complete!',               color: '#10b981' },
+  waiting_cv:          { label: 'Upload CV',               color: '#4d7c6b' },
+  cv_uploaded:         { label: 'Ready',                   color: '#4ade80' },
+  ready:               { label: 'Ready',                   color: '#4ade80' },
+  asking_location:     { label: 'Enter City',              color: '#22d3ee' },
+  searching:           { label: 'Searching Jobs...',       color: '#fbbf24' },
+  generating_cvs:      { label: 'Generating CVs...',       color: '#fbbf24' },
+  cv_review:           { label: 'Review CVs',              color: '#34d399' },
+  finding_emails:      { label: 'Finding Emails...',       color: '#fbbf24' },
+  email_review:        { label: 'Review Emails',           color: '#86efac' },
+  sending:             { label: 'Sending...',              color: '#fbbf24' },
+  preparing_interview: { label: 'Prep Interview...',       color: '#34d399' },
+  done:                { label: 'Complete!',               color: '#4ade80' },
 };
 
 // ─── Activity icon mapping ────────────────────────────────────────────────────
@@ -68,49 +68,98 @@ const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
   :root {
-    --bg-base:      #05070f;
-    --bg-surface:   #0b0e1a;
-    --bg-card:      #0f1425;
-    --bg-raised:    #141929;
-    --bg-hover:     #1a2038;
-    --bg-active:    #1f273f;
-    --border:       rgba(255,255,255,0.06);
-    --border-md:    rgba(255,255,255,0.09);
-    --border-hi:    rgba(255,255,255,0.14);
-    --accent:       #6366f1;
-    --accent-hi:    #818cf8;
-    --accent-dim:   rgba(99,102,241,0.12);
-    --accent-glow:  rgba(99,102,241,0.25);
-    --accent-line:  rgba(99,102,241,0.5);
-    --gold:         #f59e0b;
-    --gold-dim:     rgba(245,158,11,0.1);
-    --gold-border:  rgba(245,158,11,0.25);
-    --success:      #10b981;
-    --success-dim:  rgba(16,185,129,0.1);
-    --success-border: rgba(16,185,129,0.25);
-    --error:        #ef4444;
-    --error-dim:    rgba(239,68,68,0.1);
-    --error-border: rgba(239,68,68,0.25);
-    --violet:       #8b5cf6;
-    --violet-dim:   rgba(139,92,246,0.12);
-    --blue:         #3b82f6;
-    --blue-dim:     rgba(59,130,246,0.12);
-    --pink:         #ec4899;
-    --text-1:       #f1f5f9;
-    --text-2:       #94a3b8;
-    --text-3:       #475569;
-    --text-accent:  #a5b4fc;
+    --bg-base:      #071812;
+    --bg-surface:   #0c2118;
+    --bg-card:      #112a1f;
+    --bg-raised:    #163525;
+    --bg-hover:     #1b3f2b;
+    --bg-active:    #1f4832;
+    --border:       rgba(34,197,94,0.09);
+    --border-md:    rgba(34,197,94,0.14);
+    --border-hi:    rgba(34,197,94,0.24);
+    --accent:       #22c55e;
+    --accent-hi:    #4ade80;
+    --accent-dim:   rgba(34,197,94,0.13);
+    --accent-glow:  rgba(34,197,94,0.30);
+    --accent-line:  rgba(34,197,94,0.52);
+    --gold:         #fbbf24;
+    --gold-dim:     rgba(251,191,36,0.10);
+    --gold-border:  rgba(251,191,36,0.28);
+    --success:      #4ade80;
+    --success-dim:  rgba(74,222,128,0.12);
+    --success-border: rgba(74,222,128,0.28);
+    --error:        #f87171;
+    --error-dim:    rgba(248,113,113,0.10);
+    --error-border: rgba(248,113,113,0.28);
+    --violet:       #34d399;
+    --violet-dim:   rgba(52,211,153,0.12);
+    --blue:         #22d3ee;
+    --blue-dim:     rgba(34,211,238,0.12);
+    --pink:         #a3e635;
+    --text-1:       #ecfdf5;
+    --text-2:       #86efac;
+    --text-3:       #4d7c6b;
+    --text-accent:  #4ade80;
     --text-gold:    #fcd34d;
     --radius-xs:    6px;
     --radius-sm:    8px;
     --radius-md:    12px;
     --radius-lg:    16px;
     --radius-xl:    20px;
-    --shadow-sm:    0 1px 4px rgba(0,0,0,0.5);
-    --shadow-md:    0 4px 20px rgba(0,0,0,0.5);
-    --shadow-lg:    0 12px 48px rgba(0,0,0,0.6);
+    --shadow-sm:    0 1px 4px rgba(0,0,0,0.55);
+    --shadow-md:    0 4px 20px rgba(0,0,0,0.55);
+    --shadow-lg:    0 12px 48px rgba(0,0,0,0.65);
     --shadow-glow:  0 0 24px var(--accent-glow), 0 4px 20px rgba(0,0,0,0.5);
   }
+
+  /* ── Light Theme (Green) ── */
+  .t-root.light {
+    --bg-base:      #f0fdf4;
+    --bg-surface:   #ffffff;
+    --bg-card:      #f7fef9;
+    --bg-raised:    #dcfce7;
+    --bg-hover:     #d1fae5;
+    --bg-active:    #bbf7d0;
+    --border:       rgba(0,0,0,0.07);
+    --border-md:    rgba(0,0,0,0.10);
+    --border-hi:    rgba(0,0,0,0.16);
+    --accent:       #16a34a;
+    --accent-hi:    #22c55e;
+    --accent-dim:   rgba(22,163,74,0.12);
+    --accent-glow:  rgba(22,163,74,0.22);
+    --accent-line:  rgba(22,163,74,0.40);
+    --gold:         #d97706;
+    --gold-dim:     rgba(217,119,6,0.10);
+    --gold-border:  rgba(217,119,6,0.25);
+    --success:      #15803d;
+    --success-dim:  rgba(21,128,61,0.10);
+    --success-border: rgba(21,128,61,0.25);
+    --error:        #dc2626;
+    --error-dim:    rgba(220,38,38,0.10);
+    --error-border: rgba(220,38,38,0.25);
+    --violet:       #059669;
+    --violet-dim:   rgba(5,150,105,0.12);
+    --blue:         #0891b2;
+    --blue-dim:     rgba(8,145,178,0.12);
+    --pink:         #65a30d;
+    --text-1:       #052e16;
+    --text-2:       #166534;
+    --text-3:       #6b7280;
+    --text-accent:  #15803d;
+    --text-gold:    #92400e;
+    --shadow-sm:    0 1px 4px rgba(0,0,0,0.07);
+    --shadow-md:    0 4px 20px rgba(0,0,0,0.10);
+    --shadow-lg:    0 12px 48px rgba(0,0,0,0.14);
+    --shadow-glow:  0 0 24px var(--accent-glow), 0 4px 20px rgba(0,0,0,0.08);
+  }
+  .t-root.light::before { background: radial-gradient(circle, rgba(22,163,74,0.06) 0%, transparent 70%); }
+  .t-root.light::after  { background: radial-gradient(circle, rgba(5,150,105,0.05) 0%, transparent 70%); }
+  .t-root.light .t-header { background: rgba(255,255,255,0.96); }
+  .t-root.light .t-bot-bubble { background: #fff; }
+  .t-root.light .t-sidebar { background: #ffffff; }
+  .t-root.light .t-log-panel { background: var(--bg-surface); border-left-color: var(--border); }
+  .t-root.light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.10); }
+  .t-root.light ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.18); }
 
   .t-root * { font-family: 'Inter', system-ui, sans-serif; box-sizing: border-box; margin: 0; padding: 0; }
   .t-root { height: 100vh; display: flex; flex-direction: column; background: var(--bg-base); overflow: hidden; color: var(--text-1); }
@@ -118,12 +167,12 @@ const STYLES = `
   /* ── Ambient glow ── */
   .t-root::before {
     content: ''; position: fixed; top: -20%; left: 30%; width: 500px; height: 500px;
-    background: radial-gradient(circle, rgba(99,102,241,0.04) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(34,197,94,0.10) 0%, transparent 70%);
     pointer-events: none; z-index: 0;
   }
   .t-root::after {
     content: ''; position: fixed; bottom: -10%; right: 10%; width: 400px; height: 400px;
-    background: radial-gradient(circle, rgba(139,92,246,0.04) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(52,211,153,0.08) 0%, transparent 70%);
     pointer-events: none; z-index: 0;
   }
 
@@ -136,7 +185,7 @@ const STYLES = `
   /* ══════════════ HEADER ══════════════ */
   .t-header {
     position: relative; z-index: 10;
-    background: rgba(11,14,26,0.95);
+    background: rgba(7,24,18,0.97);
     border-bottom: 1px solid var(--border);
     padding: 0 20px;
     display: flex; align-items: center; justify-content: space-between;
@@ -146,7 +195,7 @@ const STYLES = `
   .t-header::after {
     content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
     background: linear-gradient(90deg, transparent 0%, var(--accent-line) 30%, var(--violet) 70%, transparent 100%);
-    opacity: 0.4;
+    opacity: 0.5;
   }
 
   .t-logo-wrap { display: flex; align-items: center; gap: 11px; }
@@ -297,7 +346,7 @@ const STYLES = `
   }
   @keyframes tPulseGlow {
     0%,100% { box-shadow: 0 0 24px var(--accent-glow), 0 4px 20px rgba(0,0,0,0.5); }
-    50%      { box-shadow: 0 0 48px rgba(99,102,241,0.45), 0 4px 20px rgba(0,0,0,0.5); }
+    50%      { box-shadow: 0 0 48px rgba(34,197,94,0.50), 0 4px 20px rgba(0,0,0,0.5); }
   }
   .t-empty h2 { color: var(--text-1); font-size: 1.5rem; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.03em; }
   .t-empty-sub { color: var(--text-2); font-size: 0.84rem; max-width: 300px; margin-bottom: 32px; line-height: 1.65; }
@@ -316,7 +365,7 @@ const STYLES = `
 
   /* ══════════════ INPUT AREA ══════════════ */
   .t-input-area {
-    background: rgba(11,14,26,0.95);
+    background: rgba(7,24,18,0.97);
     border-top: 1px solid var(--border); padding: 14px 20px 18px;
     flex-shrink: 0; position: relative; z-index: 10;
     backdrop-filter: blur(20px);
@@ -364,7 +413,7 @@ const STYLES = `
     color: white; box-shadow: var(--shadow-glow);
     animation: tPulseBtn 2s ease-in-out infinite;
   }
-  @keyframes tPulseBtn { 0%,100% { box-shadow: 0 0 12px var(--accent-glow); } 50% { box-shadow: 0 0 24px rgba(99,102,241,0.5); } }
+  @keyframes tPulseBtn { 0%,100% { box-shadow: 0 0 12px var(--accent-glow); } 50% { box-shadow: 0 0 24px rgba(34,197,94,0.55); } }
   .t-attach-btn.idle { background: var(--bg-raised); color: var(--text-3); }
   .t-attach-btn.idle:hover { background: var(--bg-hover); color: var(--text-2); }
   .t-attach-btn:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -399,7 +448,7 @@ const STYLES = `
     background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-surface) 100%);
   }
   .t-activity-title { display: flex; align-items: center; gap: 8px; }
-  .t-activity-title-icon { width: 26px; height: 26px; border-radius: 7px; background: var(--accent-dim); border: 1px solid rgba(99,102,241,0.2); display: flex; align-items: center; justify-content: center; }
+  .t-activity-title-icon { width: 26px; height: 26px; border-radius: 7px; background: var(--accent-dim); border: 1px solid rgba(34,197,94,0.22); display: flex; align-items: center; justify-content: center; }
   .t-activity-title-text { font-size: 0.78rem; font-weight: 700; color: var(--text-1); }
   .t-activity-live {
     font-size: 0.57rem; font-weight: 700; letter-spacing: 0.06em;
@@ -419,7 +468,7 @@ const STYLES = `
   .t-pipeline { padding: 14px 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .t-pipeline-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
   .t-pipeline-label { font-size: 0.58rem; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; font-family: 'JetBrains Mono', monospace; }
-  .t-pipeline-step-count { font-size: 0.58rem; font-weight: 700; color: var(--text-accent); background: var(--accent-dim); border: 1px solid rgba(99,102,241,0.2); border-radius: 4px; padding: 2px 7px; font-family: 'JetBrains Mono', monospace; }
+  .t-pipeline-step-count { font-size: 0.58rem; font-weight: 700; color: var(--text-accent); background: var(--accent-dim); border: 1px solid rgba(34,197,94,0.22); border-radius: 4px; padding: 2px 7px; font-family: 'JetBrains Mono', monospace; }
 
   .t-pipeline-track { display: flex; align-items: flex-start; }
   .t-pipe-node { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; }
@@ -441,7 +490,7 @@ const STYLES = `
     box-shadow: 0 0 10px var(--accent-glow);
     animation: tNodePulse 1.8s ease-in-out infinite;
   }
-  @keyframes tNodePulse { 0%,100% { box-shadow: 0 0 6px var(--accent-glow); } 50% { box-shadow: 0 0 18px rgba(99,102,241,0.55); } }
+  @keyframes tNodePulse { 0%,100% { box-shadow: 0 0 6px var(--accent-glow); } 50% { box-shadow: 0 0 18px rgba(34,197,94,0.60); } }
   .t-pipe-label { font-size: 0.5rem; font-weight: 600; color: var(--text-3); text-align: center; line-height: 1.25; transition: color 0.4s; max-width: 100%; padding: 0 1px; word-break: break-word; }
   .t-pipe-label.active { color: var(--text-accent); }
   .t-pipe-label.done { color: var(--success); }
@@ -466,38 +515,52 @@ const STYLES = `
   .t-log-icon.success { background: var(--success-dim); border: 1px solid var(--success-border); }
   .t-log-icon.error   { background: var(--error-dim);   border: 1px solid var(--error-border); }
   .t-log-icon.warn    { background: var(--gold-dim);    border: 1px solid var(--gold-border); }
-  .t-log-icon.info    { background: var(--accent-dim);  border: 1px solid rgba(99,102,241,0.2); }
-  .t-log-icon.search  { background: var(--blue-dim);    border: 1px solid rgba(59,130,246,0.2); }
-  .t-log-icon.cv      { background: var(--violet-dim);  border: 1px solid rgba(139,92,246,0.2); }
-  .t-log-icon.email   { background: rgba(236,72,153,0.1); border: 1px solid rgba(236,72,153,0.2); }
-  .t-log-icon.ai      { background: var(--accent-dim);  border: 1px solid rgba(99,102,241,0.2); }
+  .t-log-icon.info    { background: var(--accent-dim);  border: 1px solid rgba(34,197,94,0.22); }
+  .t-log-icon.search  { background: var(--blue-dim);    border: 1px solid rgba(34,211,238,0.22); }
+  .t-log-icon.cv      { background: var(--violet-dim);  border: 1px solid rgba(52,211,153,0.22); }
+  .t-log-icon.email   { background: rgba(163,230,53,0.10); border: 1px solid rgba(163,230,53,0.22); }
+  .t-log-icon.ai      { background: var(--accent-dim);  border: 1px solid rgba(34,197,94,0.22); }
 
   .t-log-msg { font-size: 0.72rem; font-weight: 500; color: var(--text-2); line-height: 1.5; flex: 1; word-break: break-word; }
   .t-log-time { font-size: 0.58rem; color: var(--text-3); flex-shrink: 0; font-family: 'JetBrains Mono', monospace; margin-top: 3px; opacity: 0.7; }
 
-  /* ══════════════ SETTINGS PANEL ══════════════ */
-  .t-settings {
-    position: fixed; top: 0; right: 0; height: 100%; width: 360px;
-    background: var(--bg-surface); border-left: 1px solid var(--border);
-    z-index: 60; display: flex; flex-direction: column;
-    transform: translateX(100%);
-    transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
-    box-shadow: -16px 0 48px rgba(0,0,0,0.6);
+  /* ══════════════ SETTINGS MODAL ══════════════ */
+  .t-settings-overlay {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(0,0,0,0.72); backdrop-filter: blur(10px);
+    display: flex; align-items: center; justify-content: center;
+    animation: tFadeOverlay 0.2s ease;
   }
-  .t-settings.open { transform: translateX(0); }
-  .t-settings-hdr { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .t-settings-title { color: var(--text-1); font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+  @keyframes tFadeOverlay { from { opacity: 0; } to { opacity: 1; } }
 
-  .t-stabs { display: flex; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .t-stab {
-    flex: 1; padding: 10px 4px; border: none; background: none; cursor: pointer;
-    font-size: 0.68rem; font-weight: 600; color: var(--text-3); font-family: inherit;
-    border-bottom: 2px solid transparent; transition: all 0.18s;
+  .t-settings {
+    width: 680px; max-width: calc(100vw - 32px); max-height: 88vh;
+    background: var(--bg-surface); border: 1px solid var(--border-md);
+    border-radius: var(--radius-xl); display: flex; flex-direction: column;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px var(--border);
+    animation: tModalIn 0.28s cubic-bezier(0.16,1,0.3,1);
+    overflow: hidden;
   }
-  .t-stab.active { color: var(--text-accent); border-bottom-color: var(--accent); background: var(--accent-dim); }
+  @keyframes tModalIn { from { opacity: 0; transform: translateY(24px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+  .t-settings-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    background: var(--bg-raised);
+  }
+  .t-settings-title { color: var(--text-1); font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 9px; }
+
+  .t-stabs { display: flex; background: var(--bg-raised); border-bottom: 1px solid var(--border); flex-shrink: 0; padding: 0 4px; gap: 2px; }
+  .t-stab {
+    padding: 11px 16px; border: none; background: none; cursor: pointer;
+    font-size: 0.71rem; font-weight: 600; color: var(--text-3); font-family: inherit;
+    border-bottom: 2px solid transparent; transition: all 0.18s;
+    display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  }
+  .t-stab.active { color: var(--text-accent); border-bottom-color: var(--accent); background: var(--accent-dim); border-radius: 6px 6px 0 0; }
   .t-stab:hover:not(.active) { color: var(--text-2); }
 
-  .t-settings-body { flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 18px; scrollbar-width: thin; }
+  .t-settings-body { flex: 1; overflow-y: auto; padding: 22px 24px; display: flex; flex-direction: column; gap: 20px; scrollbar-width: thin; }
 
   .t-sfield { display: flex; flex-direction: column; gap: 5px; }
   .t-sfield-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -555,7 +618,7 @@ const STYLES = `
   .t-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 40; backdrop-filter: blur(4px); }
 
   .t-sidebar {
-    position: fixed; top: 0; left: 0; height: 100%; width: 300px;
+    position: fixed; top: 0; left: 0; height: 100%; width: 320px;
     background: var(--bg-surface); border-right: 1px solid var(--border);
     z-index: 50; display: flex; flex-direction: column;
     transform: translateX(-100%);
@@ -566,20 +629,35 @@ const STYLES = `
   .t-sidebar-hdr { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--border); }
   .t-sidebar-title { color: var(--text-1); font-weight: 700; font-size: 0.9rem; }
   .t-sidebar-sub { color: var(--text-3); font-size: 0.67rem; margin-top: 2px; }
+  .t-history-search { padding: 10px; border-bottom: 1px solid var(--border); }
+  .t-history-search-wrap { position: relative; }
+  .t-history-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+  .t-history-search-input { width: 100%; background: var(--bg-base); border: 1px solid var(--border-md); border-radius: var(--radius-sm); padding: 7px 10px 7px 32px; font-size: 0.8rem; color: var(--text-1); outline: none; font-family: inherit; transition: border-color 0.15s; box-sizing: border-box; }
+  .t-history-search-input:focus { border-color: var(--accent-line); }
+  .t-history-search-input::placeholder { color: var(--text-3); }
   .t-sidebar-list { flex: 1; overflow-y: auto; padding: 10px; scrollbar-width: thin; }
+  .t-date-group { font-size: 0.6rem; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; padding: 6px 4px 4px; font-family: 'JetBrains Mono', monospace; }
 
   .t-session {
     border: 1px solid var(--border); border-radius: var(--radius-md);
-    padding: 13px; background: var(--bg-card); margin-bottom: 7px;
+    padding: 12px; background: var(--bg-card); margin-bottom: 6px;
     cursor: pointer; transition: all 0.18s;
   }
   .t-session:hover { border-color: var(--accent-line); background: var(--bg-raised); transform: translateY(-1px); box-shadow: 0 4px 16px var(--accent-glow); }
-  .t-session-role { color: var(--text-1); font-weight: 700; font-size: 0.82rem; }
+  .t-session-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .t-session-meta { min-width: 0; flex: 1; }
+  .t-session-num { font-size: 0.59rem; color: var(--text-3); font-family: 'JetBrains Mono', monospace; margin-bottom: 3px; }
+  .t-session-role { color: var(--text-1); font-weight: 700; font-size: 0.84rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .t-session-loc { color: var(--text-3); font-size: 0.68rem; display: flex; align-items: center; gap: 3px; margin-top: 2px; }
-  .t-badge { font-size: 0.61rem; font-weight: 700; padding: 2px 9px; border-radius: 100px; }
+  .t-session-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; margin-bottom: 8px; }
+  .t-stat-box { background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; text-align: center; }
+  .t-stat-val { color: var(--text-1); font-weight: 700; font-size: 0.78rem; font-family: 'JetBrains Mono', monospace; }
+  .t-stat-lbl { color: var(--text-3); font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .t-badge { font-size: 0.61rem; font-weight: 700; padding: 2px 9px; border-radius: 100px; white-space: nowrap; flex-shrink: 0; }
   .t-badge.sent { background: var(--success-dim); color: var(--success); border: 1px solid var(--success-border); }
+  .t-badge.partial { background: rgba(251,191,36,0.12); color: var(--gold); border: 1px solid rgba(251,191,36,0.3); }
   .t-badge.none { background: var(--bg-hover); color: var(--text-3); border: 1px solid var(--border); }
-  .t-company-chip { font-size: 0.61rem; font-weight: 600; background: var(--accent-dim); border: 1px solid rgba(99,102,241,0.2); color: var(--text-accent); border-radius: 4px; padding: 1px 7px; }
+  .t-company-chip { font-size: 0.61rem; font-weight: 600; background: var(--accent-dim); border: 1px solid rgba(34,197,94,0.22); color: var(--text-accent); border-radius: 4px; padding: 1px 7px; }
 
   .t-sidebar-empty { display: flex; flex-direction: column; align-items: center; padding: 52px 20px; text-align: center; }
   .t-sidebar-empty p { color: var(--text-2); font-size: 0.82rem; margin: 10px 0 2px; }
@@ -629,7 +707,7 @@ const STYLES = `
   .t-card-expand { border-top: 1px solid var(--border); background: var(--bg-surface); padding: 14px 15px; }
 
   .t-section-label { font-size: 0.61rem; font-weight: 700; color: var(--text-accent); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px; font-family: 'JetBrains Mono', monospace; }
-  .t-skill-chip { font-size: 0.66rem; font-weight: 600; background: var(--accent-dim); border: 1px solid rgba(99,102,241,0.2); color: var(--text-accent); border-radius: 5px; padding: 2px 8px; }
+  .t-skill-chip { font-size: 0.66rem; font-weight: 600; background: var(--accent-dim); border: 1px solid rgba(34,197,94,0.22); color: var(--text-accent); border-radius: 5px; padding: 2px 8px; }
   .t-exp-item { padding-left: 11px; border-left: 2px solid var(--accent-line); margin-bottom: 9px; }
   .t-exp-title { color: var(--text-1); font-size: 0.8rem; font-weight: 600; }
   .t-exp-date { color: var(--text-3); font-size: 0.69rem; margin-top: 1px; }
@@ -672,7 +750,7 @@ const STYLES = `
 
   /* ── Draft inputs ── */
   .t-draft-label { font-size: 0.6rem; font-weight: 700; color: var(--text-accent); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px; font-family: 'JetBrains Mono', monospace; }
-  .t-draft-input { width: 100%; background: var(--bg-base); border: 1px solid var(--border-md); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 0.82rem; color: var(--text-1); outline: none; font-family: inherit; transition: all 0.15s; }
+  .t-draft-input { width: 100%; background: var(--bg-raised); border: 1px solid var(--border-md); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 0.82rem; color: var(--text-1); outline: none; font-family: inherit; transition: all 0.15s; }
   .t-draft-input::placeholder { color: var(--text-3); }
   .t-draft-input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-dim); }
 
@@ -689,7 +767,7 @@ const STYLES = `
     border-radius: var(--radius-sm); cursor: pointer; padding: 7px 14px;
     font-family: inherit; transition: all 0.2s;
   }
-  .t-new-chat-btn:hover { background: rgba(99,102,241,0.2); }
+  .t-new-chat-btn:hover { background: rgba(34,197,94,0.22); }
 
   /* ── Email badges ── */
   .t-email-verified { font-size: 0.59rem; font-weight: 800; background: var(--success-dim); color: var(--success); border: 1px solid var(--success-border); border-radius: 6px; padding: 1px 7px; flex-shrink: 0; }
@@ -706,10 +784,10 @@ const STYLES = `
   .t-ollama-dot.offline { background: var(--error); }
   .t-ollama-dot.checking { background: var(--gold); animation: tDotPulse 1s infinite; }
   .t-ollama-row { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 18px; animation: tFadeUp 0.3s ease both; }
-  .t-ollama-icon { width: 32px; height: 32px; flex-shrink: 0; background: linear-gradient(135deg, var(--violet), #6d28d9); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-top: 2px; box-shadow: 0 0 12px var(--violet-dim); }
-  .t-ollama-bubble { background: var(--bg-card); border: 1px solid rgba(139,92,246,0.2); border-radius: 4px var(--radius-lg) var(--radius-lg) var(--radius-lg); padding: 13px 17px; max-width: 85%; }
-  .t-model-bar { display: flex; align-items: center; gap: 8px; padding: 8px 20px; background: var(--bg-card); border-bottom: 1px solid rgba(139,92,246,0.12); flex-shrink: 0; }
-  .t-model-select { background: var(--bg-raised); border: 1px solid rgba(139,92,246,0.3); border-radius: 7px; padding: 5px 10px; font-size: 0.71rem; font-weight: 600; color: #c4b5fd; outline: none; font-family: inherit; cursor: pointer; max-width: 200px; }
+  .t-ollama-icon { width: 32px; height: 32px; flex-shrink: 0; background: linear-gradient(135deg, var(--violet), #059669); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-top: 2px; box-shadow: 0 0 12px var(--violet-dim); }
+  .t-ollama-bubble { background: var(--bg-card); border: 1px solid rgba(52,211,153,0.22); border-radius: 4px var(--radius-lg) var(--radius-lg) var(--radius-lg); padding: 13px 17px; max-width: 85%; }
+  .t-model-bar { display: flex; align-items: center; gap: 8px; padding: 8px 20px; background: var(--bg-card); border-bottom: 1px solid rgba(52,211,153,0.14); flex-shrink: 0; }
+  .t-model-select { background: var(--bg-raised); border: 1px solid rgba(52,211,153,0.30); border-radius: 7px; padding: 5px 10px; font-size: 0.71rem; font-weight: 600; color: var(--text-accent); outline: none; font-family: inherit; cursor: pointer; max-width: 200px; }
   .t-model-select option { background: var(--bg-surface); }
 
   /* ── Animations ── */
@@ -794,14 +872,14 @@ function ActivityPanel({activityLog, currentState, isAsync}) {
   };
 
   const iconConfig = {
-    success: { Icon: CheckCircle,    color: '#10b981' },
-    error:   { Icon: XCircle,        color: '#ef4444' },
-    warn:    { Icon: AlertTriangle,  color: '#f59e0b' },
-    search:  { Icon: Search,         color: '#3b82f6' },
-    cv:      { Icon: FileText,       color: '#8b5cf6' },
-    email:   { Icon: Mail,           color: '#ec4899' },
-    ai:      { Icon: Brain,          color: '#818cf8' },
-    info:    { Icon: Zap,            color: '#818cf8' },
+    success: { Icon: CheckCircle,    color: '#4ade80' },
+    error:   { Icon: XCircle,        color: '#f87171' },
+    warn:    { Icon: AlertTriangle,  color: '#fbbf24' },
+    search:  { Icon: Search,         color: '#22d3ee' },
+    cv:      { Icon: FileText,       color: '#34d399' },
+    email:   { Icon: Mail,           color: '#a3e635' },
+    ai:      { Icon: Brain,          color: '#4ade80' },
+    info:    { Icon: Zap,            color: '#4ade80' },
   };
 
   return (
@@ -858,7 +936,7 @@ function ActivityPanel({activityLog, currentState, isAsync}) {
   );
 }
 
-/* ─── Settings Panel ─────────────────────────────────────────────────────────── */
+/* ─── Settings Modal ─────────────────────────────────────────────────────────── */
 const DEFAULT_SETTINGS_FE = {
   maxJobs: 5, defaultRole: '', defaultCity: '', jobType: 'any',
   emailSignature: '', ccMyself: false, emailLanguage: 'english',
@@ -867,7 +945,7 @@ const DEFAULT_SETTINGS_FE = {
 
 function Toggle({on, onToggle}) {
   return (
-    <div className="t-toggle" onClick={onToggle}>
+    <div className="t-toggle" onClick={onToggle} style={{cursor:'pointer'}}>
       <div className={`t-toggle-track${on?' on':''}`}>
         <div className="t-toggle-thumb"/>
       </div>
@@ -875,7 +953,7 @@ function Toggle({on, onToggle}) {
   );
 }
 
-function SettingsPanel({open, onClose}) {
+function SettingsPanel({open, onClose, theme, onThemeChange}) {
   const [tab, setTab] = useState('job');
   const [s, setS] = useState(DEFAULT_SETTINGS_FE);
   const [loading, setLoading] = useState(false);
@@ -901,35 +979,43 @@ function SettingsPanel({open, onClose}) {
   };
 
   const TABS = [
-    { id: 'job',      label: 'Job Prefs' },
-    { id: 'email',    label: 'Email' },
-    { id: 'pipeline', label: 'Pipeline' },
+    { id: 'job',        label: 'Job Prefs',  icon: Search },
+    { id: 'email',      label: 'Email',       icon: Mail },
+    { id: 'pipeline',   label: 'Pipeline',    icon: Zap },
+    { id: 'appearance', label: 'Appearance',  icon: Palette },
   ];
 
+  if (!open) return null;
+
   return (
-    <>
-      {open && <div className="t-backdrop" onClick={onClose}/>}
-      <div className={`t-settings${open?' open':''}`}>
+    <div className="t-settings-overlay" onClick={onClose}>
+      <div className="t-settings" onClick={e => e.stopPropagation()}>
+        {/* Header */}
         <div className="t-settings-hdr">
           <div className="t-settings-title">
-            <Settings style={{width:15,height:15,color:'var(--text-accent)'}}/>
+            <Settings style={{width:17,height:17,color:'var(--text-accent)'}}/>
             Settings
           </div>
-          <button className="t-icon-btn" onClick={onClose}><X style={{width:15,height:15}}/></button>
+          <button className="t-icon-btn" onClick={onClose}><X style={{width:16,height:16}}/></button>
         </div>
 
+        {/* Tabs */}
         <div className="t-stabs">
-          {TABS.map(t => (
-            <button key={t.id} className={`t-stab${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
-              {t.label}
-            </button>
-          ))}
+          {TABS.map(t => {
+            const Icon = t.icon;
+            return (
+              <button key={t.id} className={`t-stab${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
+                <Icon style={{width:13,height:13}}/>{t.label}
+              </button>
+            );
+          })}
         </div>
 
+        {/* Body */}
         <div className="t-settings-body">
           {loading ? (
-            <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 0',gap:8,color:'var(--text-3)',fontSize:'0.82rem'}}>
-              <Loader2 style={{width:15,height:15}} className="t-spin"/>Loading...
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'60px 0',gap:8,color:'var(--text-3)',fontSize:'0.82rem'}}>
+              <Loader2 style={{width:16,height:16}} className="t-spin"/>Loading settings...
             </div>
           ) : tab === 'job' ? (
             <>
@@ -945,7 +1031,7 @@ function SettingsPanel({open, onClose}) {
               </div>
               <div className="t-sfield">
                 <label className="t-slabel">Max Jobs per Search</label>
-                <p className="t-sdesc">Ek search mein kitni jobs process hon (1–10). Prompt se override ho sakta hai.</p>
+                <p className="t-sdesc">Ek search mein kitni jobs process hon (1–10)</p>
                 <div className="t-slider-wrap">
                   <input type="range" className="t-slider" min={1} max={10} value={s.maxJobs} onChange={e=>upd('maxJobs',+e.target.value)}/>
                   <span className="t-slider-val">{s.maxJobs}</span>
@@ -966,7 +1052,7 @@ function SettingsPanel({open, onClose}) {
               <div className="t-sfield">
                 <label className="t-slabel">Email Signature</label>
                 <p className="t-sdesc">Har email ke end mein yeh append hoga</p>
-                <textarea className={`t-sinput t-stextarea`} value={s.emailSignature} onChange={e=>upd('emailSignature',e.target.value)} placeholder="e.g. Best regards,&#10;Muhammad Ali&#10;+92-300-1234567"/>
+                <textarea className="t-sinput t-stextarea" value={s.emailSignature} onChange={e=>upd('emailSignature',e.target.value)} placeholder={'e.g. Best regards,\nMuhammad Ali\n+92-300-1234567'}/>
               </div>
               <div className="t-sfield">
                 <div className="t-sfield-row">
@@ -985,7 +1071,7 @@ function SettingsPanel({open, onClose}) {
                 </select>
               </div>
             </>
-          ) : (
+          ) : tab === 'pipeline' ? (
             <>
               <div className="t-sfield">
                 <label className="t-slabel">Min ATS Score Filter</label>
@@ -1017,18 +1103,63 @@ function SettingsPanel({open, onClose}) {
                 </div>
               )}
             </>
+          ) : (
+            /* ── Appearance Tab ── */
+            <div style={{display:'flex',flexDirection:'column',gap:20}}>
+              <div className="t-sfield">
+                <label className="t-slabel">Theme</label>
+                <p className="t-sdesc">App ka look aur feel customize karein</p>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginTop:8}}>
+                  {[
+                    { value:'dark',  label:'Dark', desc:'Deep Space theme', icon:'🌙' },
+                    { value:'light', label:'Light', desc:'Clean White theme', icon:'☀️' },
+                  ].map(opt => (
+                    <button key={opt.value} onClick={()=>onThemeChange(opt.value)}
+                      style={{
+                        display:'flex',flexDirection:'column',alignItems:'flex-start',gap:6,
+                        padding:'14px 16px',borderRadius:'var(--radius-md)',cursor:'pointer',
+                        border:`2px solid ${theme===opt.value?'var(--accent)':'var(--border-md)'}`,
+                        background:theme===opt.value?'var(--accent-dim)':'var(--bg-raised)',
+                        transition:'all 0.18s', fontFamily:'inherit',
+                      }}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <span style={{fontSize:'1.2rem'}}>{opt.icon}</span>
+                        <span style={{color:theme===opt.value?'var(--text-accent)':'var(--text-1)',fontWeight:700,fontSize:'0.85rem'}}>{opt.label}</span>
+                        {theme===opt.value&&<CheckCircle style={{width:13,height:13,color:'var(--accent)',marginLeft:'auto'}}/>}
+                      </div>
+                      <span style={{fontSize:'0.68rem',color:'var(--text-3)',fontWeight:500}}>{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="t-sdivider"/>
+              <div className="t-sfield">
+                <label className="t-slabel">Current Theme</label>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginTop:6,background:'var(--bg-raised)',border:'1px solid var(--border-md)',borderRadius:'var(--radius-sm)',padding:'10px 14px'}}>
+                  {theme==='dark'
+                    ?<><Moon style={{width:14,height:14,color:'var(--text-accent)'}}/><span style={{fontSize:'0.8rem',fontWeight:600,color:'var(--text-2)'}}>Dark Mode active — Deep Space palette</span></>
+                    :<><Sun style={{width:14,height:14,color:'var(--gold)'}}/><span style={{fontSize:'0.8rem',fontWeight:600,color:'var(--text-2)'}}>Light Mode active — Clean White palette</span></>
+                  }
+                </div>
+              </div>
+              <p style={{fontSize:'0.7rem',color:'var(--text-3)',lineHeight:1.5}}>
+                Theme preference aapke browser mein save hoti hai aur next visit pe bhi yaad rahti hai.
+              </p>
+            </div>
           )}
 
-          {saved ? (
-            <div className="t-ssaved"><CheckCircle style={{width:14,height:14}}/> Settings save ho gayi!</div>
-          ) : (
-            <button className="t-ssave-btn" onClick={save} disabled={saving}>
-              {saving ? <><Loader2 style={{width:13,height:13}} className="t-spin"/>Saving...</> : <><Save style={{width:13,height:13}}/>Save Settings</>}
-            </button>
+          {tab !== 'appearance' && (
+            saved ? (
+              <div className="t-ssaved"><CheckCircle style={{width:14,height:14}}/> Settings save ho gayi!</div>
+            ) : (
+              <button className="t-ssave-btn" onClick={save} disabled={saving}>
+                {saving ? <><Loader2 style={{width:13,height:13}} className="t-spin"/>Saving...</> : <><Save style={{width:13,height:13}}/>Save Settings</>}
+              </button>
+            )
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -1127,39 +1258,72 @@ function EmailApprovalCards({emailDrafts,approvalId,onSend,onReject,loading,read
   const skipped=emailDrafts.filter(d=>!d.hrEmail||d.error);
   const update=(idx,field,val)=>{if(readOnly)return;const u=[...drafts];u[idx]={...u[idx],[field]:val};setDrafts(u);};
 
+  // Count total email sends (multiple recipients per job)
+  const totalSends = drafts.reduce((sum,d)=>{
+    const cnt = (d.hrEmails && d.hrEmails.length > 0) ? d.hrEmails.length : 1;
+    return sum + cnt;
+  }, 0);
+
   return <div style={{width:'100%'}}>
     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
       <Mail style={{width:15,height:15,color:'var(--pink)'}}/>
       <p className="t-approve-label">{drafts.length} email draft{drafts.length!==1?'s':''} {readOnly?'sent':'ready'}</p>
+      {totalSends > drafts.length && <span style={{fontSize:'0.68rem',fontWeight:700,color:'var(--text-accent)',background:'var(--accent-dim)',border:'1px solid var(--accent-line)',borderRadius:5,padding:'2px 7px'}}>{totalSends} total recipients</span>}
     </div>
-    {skipped.length>0&&<p style={{fontSize:'0.72rem',color:'var(--text-3)',fontWeight:500,marginBottom:10}}>{skipped.length} companies — HR email not found, skipped</p>}
+    {skipped.length>0&&<p style={{fontSize:'0.72rem',color:'var(--text-3)',fontWeight:500,marginBottom:10}}>{skipped.length} companies — email not found, skipped</p>}
     <div style={{marginBottom:12}}>
-      {drafts.map((draft,idx)=><div key={idx} className="t-card">
-        <button className="t-card-btn" onClick={()=>setExpanded(expanded===idx?null:idx)}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <p className="t-card-title">{draft.job?.company}</p>
-              {draft.emailVerified&&<span className="t-email-verified">✓ Verified</span>}
-              {draft.emailSource==='hunter'&&!draft.emailVerified&&draft.emailVerifyResult==='risky'&&<span className="t-email-risky">⚠ Risky</span>}
-              {draft.emailSource==='llm'&&<span className="t-email-est">~ Estimated</span>}
+      {drafts.map((draft,idx)=>{
+        const recipients = (draft.hrEmails && draft.hrEmails.length > 0) ? draft.hrEmails : [draft.hrEmail];
+        const isMulti = recipients.length > 1;
+        const isExec = draft.emailType === 'exec';
+        return <div key={idx} className="t-card">
+          <button className="t-card-btn" onClick={()=>setExpanded(expanded===idx?null:idx)}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                <p className="t-card-title">{draft.job?.company}</p>
+                {isExec&&<span style={{fontSize:'0.6rem',fontWeight:700,background:'rgba(245,158,11,0.12)',color:'var(--gold)',border:'1px solid rgba(245,158,11,0.3)',borderRadius:5,padding:'1px 6px'}}>👔 Executive</span>}
+                {!isExec&&draft.hrEmail&&<span style={{fontSize:'0.6rem',fontWeight:700,background:'rgba(16,185,129,0.1)',color:'var(--success)',border:'1px solid var(--success-border)',borderRadius:5,padding:'1px 6px'}}>HR</span>}
+                {draft.emailVerified&&<span className="t-email-verified">✓ Verified</span>}
+                {draft.emailSource==='hunter'&&!draft.emailVerified&&draft.emailVerifyResult==='risky'&&<span className="t-email-risky">⚠ Risky</span>}
+                {draft.emailSource==='llm'&&<span className="t-email-est">~ Estimated</span>}
+                {isMulti&&<span style={{fontSize:'0.6rem',fontWeight:700,background:'var(--violet-dim)',color:'#c4b5fd',border:'1px solid rgba(139,92,246,0.25)',borderRadius:5,padding:'1px 6px'}}><Users style={{width:9,height:9,display:'inline',marginRight:3}}/>{recipients.length} recipients</span>}
+              </div>
+              <p style={{fontSize:'0.7rem',color:'var(--text-3)',fontWeight:500,marginTop:3}}>
+                {isMulti ? recipients.join(' · ') : draft.hrEmail} · {draft.job?.title}
+              </p>
             </div>
-            <p style={{fontSize:'0.7rem',color:'var(--text-3)',fontWeight:500,marginTop:2}}>{draft.hrEmail} · {draft.job?.title}</p>
-          </div>
-          {expanded===idx?<ChevronUp style={{width:14,height:14,color:'var(--text-accent)',flexShrink:0}}/>:<ChevronDown style={{width:14,height:14,color:'var(--text-3)',flexShrink:0}}/>}
-        </button>
-        {expanded===idx&&<div className="t-card-expand" style={{display:'flex',flexDirection:'column',gap:10}}>
-          {[{label:'To (HR Email)',key:'hrEmail'},{label:'Subject',key:'subject'}].map(({label,key})=>
-            <div key={key}><div className="t-draft-label">{label}</div><input type="text" value={draft[key]||''} onChange={e=>update(idx,key,e.target.value)} readOnly={readOnly} className="t-draft-input" style={{marginTop:4}}/></div>)}
-          <div><div className="t-draft-label">Email Body</div><textarea value={draft.body||''} onChange={e=>update(idx,'body',e.target.value)} readOnly={readOnly} rows={5} className="t-draft-input" style={{marginTop:4,resize:'none',lineHeight:1.6}}/></div>
-        </div>}
-      </div>)}
+            {expanded===idx?<ChevronUp style={{width:14,height:14,color:'var(--text-accent)',flexShrink:0}}/>:<ChevronDown style={{width:14,height:14,color:'var(--text-3)',flexShrink:0}}/>}
+          </button>
+          {expanded===idx&&<div className="t-card-expand" style={{display:'flex',flexDirection:'column',gap:10}}>
+            {/* Show all recipient emails */}
+            <div>
+              <div className="t-draft-label">{isMulti ? `Recipients (${recipients.length})` : 'To (Email)'}</div>
+              {isMulti
+                ? <div style={{display:'flex',flexDirection:'column',gap:4,marginTop:4}}>
+                    {recipients.map((email,ri)=>(
+                      <div key={ri} style={{display:'flex',alignItems:'center',gap:6}}>
+                        <span style={{fontSize:'0.62rem',fontWeight:700,color:ri===0?'var(--text-accent)':'var(--text-3)',minWidth:16}}>{ri+1}.</span>
+                        <input type="text" value={email} readOnly={readOnly}
+                          onChange={e=>{if(readOnly)return;const u=[...drafts];const emails=[...recipients];emails[ri]=e.target.value;u[idx]={...u[idx],hrEmails:emails,hrEmail:emails[0]};setDrafts(u);}}
+                          className="t-draft-input" style={{flex:1}}/>
+                      </div>
+                    ))}
+                  </div>
+                : <input type="text" value={draft.hrEmail||''} onChange={e=>update(idx,'hrEmail',e.target.value)} readOnly={readOnly} className="t-draft-input" style={{marginTop:4}}/>
+              }
+            </div>
+            <div><div className="t-draft-label">Subject</div><input type="text" value={draft.subject||''} onChange={e=>update(idx,'subject',e.target.value)} readOnly={readOnly} className="t-draft-input" style={{marginTop:4}}/></div>
+            <div><div className="t-draft-label">Email Body</div><textarea value={draft.body||''} onChange={e=>update(idx,'body',e.target.value)} readOnly={readOnly} rows={5} className="t-draft-input" style={{marginTop:4,resize:'none',lineHeight:1.6}}/></div>
+          </div>}
+        </div>;
+      })}
     </div>
     {readOnly
-      ?<div style={{display:'flex',alignItems:'center',gap:7,background:'var(--blue-dim)',border:'1px solid rgba(59,130,246,0.25)',borderRadius:'var(--radius-sm)',padding:'9px 14px'}}>
-          <Send style={{width:14,height:14,color:'#60a5fa'}}/><span style={{color:'#93c5fd',fontSize:'0.8rem',fontWeight:700}}>Sent — {drafts.length} application{drafts.length!==1?'s':''} dispatched</span>
+      ?<div style={{display:'flex',alignItems:'center',gap:7,background:'var(--success-dim)',border:'1px solid var(--success-border)',borderRadius:'var(--radius-sm)',padding:'9px 14px'}}>
+          <Send style={{width:14,height:14,color:'var(--success)'}}/><span style={{color:'var(--text-accent)',fontSize:'0.8rem',fontWeight:700}}>Sent — {drafts.length} application{drafts.length!==1?'s':''} dispatched</span>
         </div>
       :<div style={{display:'flex',gap:8}}>
-          <button className="t-send-email-btn" onClick={()=>onSend(approvalId,drafts)} disabled={loading||drafts.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="t-spin"/>Sending...</>:<><Send style={{width:14,height:14}}/>Send {drafts.length} Application{drafts.length!==1?'s':''}</>}</button>
+          <button className="t-send-email-btn" onClick={()=>onSend(approvalId,drafts)} disabled={loading||drafts.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="t-spin"/>Sending...</>:<><Send style={{width:14,height:14}}/>Send {totalSends} Email{totalSends!==1?'s':''}</>}</button>
           <button className="t-cancel-btn" onClick={()=>onReject()} disabled={loading}><XCircle style={{width:13,height:13}}/>Cancel</button>
         </div>
     }
@@ -1169,19 +1333,36 @@ function EmailApprovalCards({emailDrafts,approvalId,onSend,onReject,loading,read
 /* ─── Send Results ───────────────────────────────────────────────────────────── */
 function SendResults({results,onNewChat}) {
   const ok=results.filter(r=>r.success), fail=results.filter(r=>!r.success);
+  const totalEmails=results.reduce((s,r)=>{
+    if(!r.success) return s;
+    return s + (r.perEmailResults ? r.perEmailResults.filter(e=>e.success).length : (r.hrEmails?.length||1));
+  },0);
   return <div style={{width:'100%'}}>
     <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:11}}>
-      {ok.length>0&&<span style={{display:'flex',alignItems:'center',gap:5,color:'var(--success)',fontSize:'0.84rem',fontWeight:800}}><CheckCircle style={{width:14,height:14}}/>{ok.length} sent</span>}
+      {ok.length>0&&<span style={{display:'flex',alignItems:'center',gap:5,color:'var(--success)',fontSize:'0.84rem',fontWeight:800}}><CheckCircle style={{width:14,height:14}}/>{ok.length} companies{totalEmails>ok.length?` (${totalEmails} emails)`:''}</span>}
       {fail.length>0&&<span style={{display:'flex',alignItems:'center',gap:5,color:'var(--error)',fontSize:'0.84rem',fontWeight:800}}><XCircle style={{width:14,height:14}}/>{fail.length} failed</span>}
     </div>
-    {results.map((r,idx)=><div key={idx} className={r.success?'t-result-ok':'t-result-fail'}>
-      <div style={{display:'flex',alignItems:'center',gap:6}}>
-        {r.success?<CheckCircle style={{width:12,height:12,color:'var(--success)',flexShrink:0}}/>:<XCircle style={{width:12,height:12,color:'var(--error)',flexShrink:0}}/>}
-        <span className="t-result-co">{r.company}</span>
-        {r.jobTitle&&<span className="t-result-det">— {r.jobTitle}</span>}
-      </div>
-      <span className="t-result-det">{r.hrEmail||r.error||''}</span>
-    </div>)}
+    {results.map((r,idx)=>{
+      const perResults = r.perEmailResults || [];
+      const isMulti = perResults.length > 1;
+      return <div key={idx} className={r.success?'t-result-ok':'t-result-fail'}>
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          {r.success?<CheckCircle style={{width:12,height:12,color:'var(--success)',flexShrink:0}}/>:<XCircle style={{width:12,height:12,color:'var(--error)',flexShrink:0}}/>}
+          <span className="t-result-co">{r.company}</span>
+          {r.jobTitle&&<span className="t-result-det">— {r.jobTitle}</span>}
+          {r.emailType==='exec'&&<span style={{fontSize:'0.6rem',fontWeight:700,color:'var(--gold)',background:'rgba(245,158,11,0.1)',border:'1px solid rgba(245,158,11,0.2)',borderRadius:4,padding:'1px 5px'}}>exec</span>}
+        </div>
+        {isMulti
+          ? <div style={{display:'flex',flexDirection:'column',gap:2,marginTop:2}}>
+              {perResults.map((pe,pi)=><span key={pi} className="t-result-det" style={{display:'flex',alignItems:'center',gap:4}}>
+                {pe.success?<CheckCircle style={{width:9,height:9,color:'var(--success)'}}/>:<XCircle style={{width:9,height:9,color:'var(--error)'}}/>}
+                {pe.email}{pe.error?` — ${pe.error}`:''}
+              </span>)}
+            </div>
+          : <span className="t-result-det">{r.hrEmail||r.error||''}</span>
+        }
+      </div>;
+    })}
     <button className="t-new-chat-btn" onClick={onNewChat}><Plus style={{width:13,height:13}}/>New Chat shuru karein</button>
   </div>;
 }
@@ -1225,44 +1406,116 @@ function PrepQuestionsCard({prepResults}) {
 
 /* ─── History Sidebar ────────────────────────────────────────────────────────── */
 function HistorySidebar({open,onClose,onLoad}) {
-  const [history,setHistory]=useState([]);const [loading,setLoading]=useState(false);const [loadingKey,setLoadingKey]=useState(null);
-  useEffect(()=>{if(!open)return;setLoading(true);fteApi.getHistory().then(res=>setHistory(res.data.history||[])).catch(()=>setHistory([])).finally(()=>setLoading(false));},[open]);
-  const fmt=(iso)=>{if(!iso)return'';const d=new Date(iso);return d.toLocaleDateString('en-PK',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'});};
+  const [history,setHistory]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [loadingKey,setLoadingKey]=useState(null);
+  const [query,setQuery]=useState('');
+
+  useEffect(()=>{
+    if(!open)return;
+    setLoading(true);setQuery('');
+    fteApi.getHistory().then(res=>setHistory(res.data.history||[])).catch(()=>setHistory([])).finally(()=>setLoading(false));
+  },[open]);
+
+  const relTime=(iso)=>{
+    if(!iso)return'';
+    const diff=Date.now()-new Date(iso).getTime();
+    const m=Math.floor(diff/60000);
+    if(m<1)return'Just now';if(m<60)return`${m}m ago`;
+    const h=Math.floor(m/60);if(h<24)return`${h}h ago`;
+    const d=Math.floor(h/24);if(d===1)return'Yesterday';if(d<7)return`${d}d ago`;
+    return new Date(iso).toLocaleDateString('en-PK',{day:'numeric',month:'short'});
+  };
+  const absTime=(iso)=>{
+    if(!iso)return'';
+    return new Date(iso).toLocaleDateString('en-PK',{day:'numeric',month:'short',year:'numeric'})+' · '+new Date(iso).toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'});
+  };
+  const dateGroup=(iso)=>{
+    if(!iso)return'Older';
+    const d=new Date(iso);const now=new Date();
+    if(d.toDateString()===now.toDateString())return'Today';
+    const yest=new Date(now);yest.setDate(now.getDate()-1);
+    if(d.toDateString()===yest.toDateString())return'Yesterday';
+    if((now-d)<7*864e5)return'This Week';
+    return'Older';
+  };
+
   const handleOpen=async(s)=>{
     if(loadingKey)return;setLoadingKey(s.key);
     try{const res=await fteApi.getHistorySession(s.key);onLoad&&onLoad(res.data.session);onClose();}
     catch{toast.error('Could not load session');}
     finally{setLoadingKey(null);}
   };
+
+  const q=query.trim().toLowerCase();
+  const filtered=q?history.filter(s=>(s.role||'').toLowerCase().includes(q)||(s.location||'').toLowerCase().includes(q)):history;
+
+  const GROUP_ORDER=['Today','Yesterday','This Week','Older'];
+  const grouped=GROUP_ORDER.reduce((acc,g)=>{
+    const items=filtered.filter(s=>dateGroup(s.completedAt)===g);
+    if(items.length)acc.push({group:g,items});
+    return acc;
+  },[]);
+
+  const badgeCls=(s)=>s.sentCount>0?'sent':s.emailCount>0?'partial':'none';
+  const badgeLbl=(s)=>s.sentCount>0?`${s.sentCount} Sent`:s.emailCount>0?'Emails Ready':'Incomplete';
+
   return <>
     {open&&<div className="t-backdrop" onClick={onClose}/>}
     <div className={`t-sidebar${open?' open':''}`}>
       <div className="t-sidebar-hdr">
-        <div><div className="t-sidebar-title">Session History</div><div className="t-sidebar-sub">Click a session to view</div></div>
+        <div>
+          <div className="t-sidebar-title">Session History</div>
+          <div className="t-sidebar-sub">{loading?'Loading…':`${filtered.length} session${filtered.length!==1?'s':''}`}</div>
+        </div>
         <button className="t-icon-btn" onClick={onClose}><X style={{width:15,height:15}}/></button>
       </div>
+      <div className="t-history-search">
+        <div className="t-history-search-wrap">
+          <Search className="t-history-search-icon" style={{width:13,height:13}}/>
+          <input className="t-history-search-input" placeholder="Search role or location…" value={query} onChange={e=>setQuery(e.target.value)}/>
+        </div>
+      </div>
       <div className="t-sidebar-list">
-        {loading&&<div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'48px 0',gap:8,color:'var(--text-3)',fontSize:'0.82rem'}}><Loader2 style={{width:15,height:15}} className="t-spin"/>Loading...</div>}
-        {!loading&&history.length===0&&<div className="t-sidebar-empty">
+        {loading&&<div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'48px 0',gap:8,color:'var(--text-3)',fontSize:'0.82rem'}}><Loader2 style={{width:15,height:15}} className="t-spin"/>Loading…</div>}
+        {!loading&&filtered.length===0&&<div className="t-sidebar-empty">
           <Clock style={{width:28,height:28,color:'var(--text-3)'}}/>
-          <p>No history yet</p><small>Complete your first session!</small>
+          <p>{query?'No matches found':'No history yet'}</p>
+          <small>{query?'Try a different search term':'Complete your first session!'}</small>
         </div>}
-        {!loading&&history.map((s,idx)=><div key={idx} className="t-session" onClick={()=>handleOpen(s)}>
-          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:8}}>
-            <div style={{minWidth:0}}>
-              <div className="t-session-role">{s.role||'Unknown Role'}</div>
-              <div className="t-session-loc"><MapPin style={{width:10,height:10}}/>{s.location||'—'}</div>
-            </div>
-            <span className={`t-badge ${s.sentCount>0?'sent':'none'}`}>
-              {loadingKey===s.key?<Loader2 style={{width:10,height:10}} className="t-spin"/>:s.sentCount>0?`${s.sentCount} sent`:'No sends'}
-            </span>
-          </div>
-          <div style={{display:'flex',gap:12,fontSize:'0.7rem',color:'var(--text-3)',marginBottom:8}}>
-            <span style={{display:'flex',alignItems:'center',gap:3}}><FileText style={{width:10,height:10}}/>{s.cvCount||0} CVs</span>
-            <span style={{display:'flex',alignItems:'center',gap:3}}><Mail style={{width:10,height:10}}/>{s.emailCount||0} emails</span>
-          </div>
-          {s.companies?.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8}}>{s.companies.slice(0,3).map((c,i)=><span key={i} className="t-company-chip">{c}</span>)}{s.companies.length>3&&<span style={{fontSize:'0.65rem',color:'var(--text-accent)',fontWeight:600}}>+{s.companies.length-3}</span>}</div>}
-          <div style={{color:'var(--text-3)',fontSize:'0.65rem',display:'flex',alignItems:'center',gap:4}}><Clock style={{width:10,height:10}}/>{fmt(s.completedAt)}</div>
+        {!loading&&grouped.map(({group,items})=><div key={group}>
+          <div className="t-date-group">{group}</div>
+          {items.map((s,idx)=>{
+            const gIdx=history.indexOf(s);
+            return <div key={s.key||idx} className="t-session" onClick={()=>handleOpen(s)}>
+              <div className="t-session-header">
+                <div className="t-session-meta">
+                  <div className="t-session-num">#{history.length-gIdx} · {relTime(s.completedAt)}</div>
+                  <div className="t-session-role">{s.role||'Unknown Role'}</div>
+                  <div className="t-session-loc"><MapPin style={{width:10,height:10}}/>{s.location||'—'}</div>
+                </div>
+                <span className={`t-badge ${badgeCls(s)}`}>
+                  {loadingKey===s.key?<Loader2 style={{width:10,height:10}} className="t-spin"/>:badgeLbl(s)}
+                </span>
+              </div>
+              <div className="t-session-stats">
+                <div className="t-stat-box"><div className="t-stat-val">{s.jobCount||0}</div><div className="t-stat-lbl">Jobs</div></div>
+                <div className="t-stat-box"><div className="t-stat-val">{s.cvCount||0}</div><div className="t-stat-lbl">CVs</div></div>
+                <div className="t-stat-box"><div className="t-stat-val">{s.emailCount||0}</div><div className="t-stat-lbl">Emails</div></div>
+                <div className="t-stat-box" style={s.sentCount>0?{background:'var(--success-dim)',borderColor:'var(--success-border)'}:{}}>
+                  <div className="t-stat-val" style={s.sentCount>0?{color:'var(--success)'}:{}}>{s.sentCount||0}</div>
+                  <div className="t-stat-lbl" style={s.sentCount>0?{color:'var(--success)'}:{}}>Sent</div>
+                </div>
+              </div>
+              {s.companies?.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:8}}>
+                {s.companies.slice(0,4).map((c,i)=><span key={i} className="t-company-chip">{c}</span>)}
+                {s.companies.length>4&&<span style={{fontSize:'0.65rem',color:'var(--text-accent)',fontWeight:600}}>+{s.companies.length-4}</span>}
+              </div>}
+              <div style={{color:'var(--text-3)',fontSize:'0.65rem',display:'flex',alignItems:'center',gap:4}} title={absTime(s.completedAt)}>
+                <Clock style={{width:10,height:10}}/>{absTime(s.completedAt)}
+              </div>
+            </div>;
+          })}
         </div>)}
       </div>
     </div>
@@ -1352,6 +1605,10 @@ function ProfilePanel({open,onClose,user,onUpdateUser,onLogout}) {
 export default function FTEChat() {
   const {user,logout,updateUser}=useAuth();
   const [mode,setMode]=useState('fte');
+
+  // ── Theme ───────────────────────────────────────────────────────────────────
+  const [theme,setTheme]=useState(()=>localStorage.getItem('talvion_theme')||'dark');
+  const handleThemeChange=(t)=>{setTheme(t);localStorage.setItem('talvion_theme',t);};
 
   const [messages,setMessages]=useState([]);
   const [currentState,setCurrentState]=useState('waiting_cv');
@@ -1509,10 +1766,10 @@ export default function FTEChat() {
 
   return <>
     <style>{STYLES}</style>
-    <div className="t-root">
+    <div className={`t-root${theme==='light'?' light':''}`}>
       <HistorySidebar open={historyOpen} onClose={()=>setHistoryOpen(false)} onLoad={handleLoadHistory}/>
       <ProfilePanel open={profileOpen} onClose={()=>setProfileOpen(false)} user={user} onUpdateUser={updateUser} onLogout={logout}/>
-      <SettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)}/>
+      <SettingsPanel open={settingsOpen} onClose={()=>setSettingsOpen(false)} theme={theme} onThemeChange={handleThemeChange}/>
 
       {/* ══ HEADER ══ */}
       <header className="t-header">
@@ -1546,6 +1803,9 @@ export default function FTEChat() {
             </button>
           </div>
           {mode==='fte'&&<button className="t-btn" onClick={handleNewChat}><Plus style={{width:12,height:12}}/>New Chat</button>}
+          <button className="t-icon-btn" onClick={()=>handleThemeChange(theme==='dark'?'light':'dark')} title={theme==='dark'?'Light Mode':'Dark Mode'} style={{color:'var(--text-3)'}}>
+            {theme==='dark'?<Sun style={{width:15,height:15}}/>:<Moon style={{width:15,height:15}}/>}
+          </button>
           <button className="t-icon-btn" onClick={()=>setSettingsOpen(true)} title="Settings" style={{color:'var(--text-3)'}}>
             <Settings style={{width:15,height:15}}/>
           </button>

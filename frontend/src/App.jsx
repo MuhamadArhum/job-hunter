@@ -6,6 +6,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import FTEChat from './pages/FTEChat';
 import './index.css';
 
@@ -15,7 +17,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Redirect logged-in users away from login/register
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -26,10 +27,12 @@ function PublicRoute({ children }) {
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-      <Route path="/chat"     element={<ProtectedRoute><FTEChat /></ProtectedRoute>} />
-      <Route path="*"         element={<Navigate to="/chat" replace />} />
+      <Route path="/login"           element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/register"        element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/reset-password"  element={<ResetPassword />} />
+      <Route path="/chat"            element={<ProtectedRoute><FTEChat /></ProtectedRoute>} />
+      <Route path="*"                element={<Navigate to="/chat" replace />} />
     </Routes>
   );
 }
@@ -45,17 +48,17 @@ export default function App() {
             toastOptions={{
               duration: 4000,
               style: {
-                background: '#fff',
-                color: '#071a10',
-                border: '1px solid #c8e8d8',
-                boxShadow: '0 4px 16px rgba(16,185,129,0.12)',
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                background: '#0c2118',
+                color: '#ecfdf5',
+                border: '1px solid rgba(34,197,94,0.20)',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+                fontFamily: "'Inter', system-ui, sans-serif",
                 fontWeight: 600,
-                fontSize: '0.85rem',
+                fontSize: '0.84rem',
                 borderRadius: '12px',
               },
-              success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
-              error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+              success: { iconTheme: { primary: '#4ade80', secondary: '#0c2118' } },
+              error:   { iconTheme: { primary: '#f87171', secondary: '#0c2118' } },
             }}
           />
         </Router>

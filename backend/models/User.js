@@ -100,6 +100,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  passwordResetToken: {
+    type: String,
+    select: false,
+  },
+  passwordResetExpires: {
+    type: Date,
+    select: false,
+  },
   gmailCredentials: {
     type: mongoose.Schema.Types.Mixed,
     default: null,

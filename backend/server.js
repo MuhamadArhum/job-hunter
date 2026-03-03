@@ -4,7 +4,6 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 
 const app = express();
 
@@ -21,17 +20,6 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting for email sending
-const emailLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  max: process.env.MAX_EMAILS_PER_DAY || 20,
-  message: {
-    error: 'Email limit exceeded. You can send up to 20 emails per day.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 // Database connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/job-application-agent', {
   useNewUrlParser: true,
@@ -43,15 +31,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/job-appli
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
-app.use('/api/jobs', require('./routes/jobs'));
-app.use('/api/applications', require('./routes/applications'));
-app.use('/api/cover-letter', require('./routes/coverLetter'));
-app.use('/api/email', emailLimiter, require('./routes/email'));
-app.use('/api/test', require('./routes/test'));
-app.use('/api/orchestrator', require('./routes/orchestrator'));
-app.use('/api/pipeline', require('./routes/pipeline'));
 app.use('/api/fte', require('./routes/fte'));
-app.use('/api/ollama', require('./routes/ollama'));
+app.use('/api/test', require('./routes/test'));
 
 // File upload handling
 app.use('/uploads', express.static('uploads'));
