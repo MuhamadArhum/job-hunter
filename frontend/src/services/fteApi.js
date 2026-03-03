@@ -72,4 +72,9 @@ export const fteApi = {
    * Save user settings (partial update)
    */
   saveSettings: (data) => api.put('/fte/settings', data),
+
+  /**
+   * Generate interview prep questions for a specific job
+   */
+  interviewPrep: (job) => api.post('/fte/interview-prep', { job }),
 };

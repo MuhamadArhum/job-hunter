@@ -256,6 +256,11 @@ async function saveToHistory(userId, fteState, successCount) {
       .filter(Boolean),
     completedAt: new Date().toISOString(),
     messages: fteState.history || [],
+    activityLog: fteState.activityLog || [],
+    jobs:        fteState.jobs        || [],
+    cvResults:   fteState.cvResults   || [],
+    emailDrafts: fteState.emailDrafts || [],
+    sendResults: fteState.sendResults || [],
   };
   await Memory.findOneAndUpdate(
     { userId, memoryType: 'long_term', category: 'fte_history', key },

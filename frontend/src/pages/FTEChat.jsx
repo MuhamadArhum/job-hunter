@@ -840,6 +840,57 @@ const STYLES = `
     pointer-events: none;
   }
   .t-ripple:active::after { opacity: 1; }
+
+  /* ══════════════ INTRO OVERLAY ══════════════ */
+  @keyframes tIntroLogo { 0%{opacity:0;transform:scale(0.7)} 60%{opacity:1;transform:scale(1.06)} 100%{opacity:1;transform:scale(1)} }
+  @keyframes tIntroBar  { from{width:0%} to{width:100%} }
+  @keyframes tIntroFadeOut { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(1.04)} }
+  .t-intro { position:fixed;inset:0;z-index:9999;background:#071812;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px; }
+  .t-intro-out { animation:tIntroFadeOut 0.5s ease-out forwards; }
+  .t-intro-logo { animation:tIntroLogo 0.9s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .t-intro-wordmark { color:#ecfdf5;font-weight:800;font-size:1.7rem;letter-spacing:-0.03em;font-family:'Inter',sans-serif; }
+  .t-intro-tagline { color:#4d7c6b;font-size:0.82rem;font-family:'Inter',sans-serif; }
+  .t-intro-bar { width:200px;height:3px;background:rgba(34,197,94,0.12);border-radius:2px;overflow:hidden;margin-top:8px; }
+  .t-intro-fill { height:100%;background:linear-gradient(90deg,#22c55e,#4ade80);animation:tIntroBar 1.8s ease-in-out forwards; }
+
+  /* ══════════════ RIGHT PANEL TABS ══════════════ */
+  .t-rtab-row { display:flex;gap:4px;padding:8px 10px 6px;flex-shrink:0;border-bottom:1px solid var(--border); }
+  .t-rtab { flex:1;padding:5px 0;background:none;border:1px solid rgba(34,197,94,0.10);border-radius:7px;color:var(--text-3);font-size:0.69rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s; }
+  .t-rtab.active { background:rgba(34,197,94,0.10);color:var(--text-accent);border-color:rgba(34,197,94,0.26); }
+  .t-rtab:hover:not(.active) { color:var(--text-2);border-color:rgba(34,197,94,0.18); }
+
+  /* ══════════════ DATA PANEL ══════════════ */
+  .t-dp { flex:1;overflow-y:auto;padding:0 0 16px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.06) transparent; }
+  .t-dp-empty { display:flex;flex-direction:column;align-items:center;padding:40px 16px;text-align:center;color:var(--text-3);font-size:0.74rem; }
+  .t-dp-section { padding:10px 12px;border-bottom:1px solid rgba(34,197,94,0.06); }
+  .t-dp-section-title { color:var(--text-3);font-size:0.61rem;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;margin-bottom:8px;font-family:'JetBrains Mono',monospace; }
+  .t-dp-job { background:rgba(34,197,94,0.04);border:1px solid rgba(34,197,94,0.09);border-radius:8px;padding:8px 10px;margin-bottom:6px; }
+  .t-dp-job-title { color:var(--text-1);font-size:0.76rem;font-weight:600;line-height:1.3; }
+  .t-dp-job-company { color:var(--text-3);font-size:0.69rem;margin-top:2px; }
+  .t-dp-prep-btn { margin-top:7px;width:100%;padding:5px 0;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.16);border-radius:6px;color:var(--text-accent);font-size:0.69rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s; }
+  .t-dp-prep-btn:hover:not(:disabled) { background:rgba(34,197,94,0.14);border-color:rgba(34,197,94,0.28); }
+  .t-dp-prep-btn:disabled { opacity:0.45;cursor:not-allowed; }
+  .t-dp-questions { margin-top:8px;display:flex;flex-direction:column;gap:5px; }
+  .t-dp-q-group { font-size:0.63rem;font-weight:700;color:var(--text-accent);text-transform:uppercase;letter-spacing:0.07em;margin:6px 0 3px; }
+  .t-dp-q-item { background:rgba(7,24,18,0.7);border-left:2px solid rgba(34,197,94,0.22);padding:5px 8px;border-radius:0 5px 5px 0;color:var(--text-2);font-size:0.71rem;line-height:1.45; }
+  .t-dp-cv { background:rgba(52,211,153,0.05);border:1px solid rgba(52,211,153,0.10);border-radius:8px;padding:7px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px; }
+  .t-dp-cv-info { flex:1;min-width:0; }
+  .t-dp-cv-title { color:var(--text-1);font-size:0.72rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .t-dp-cv-ats { font-size:0.65rem;font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0; }
+  .t-dp-cv-ats.high { background:rgba(74,222,128,0.12);color:#4ade80;border:1px solid rgba(74,222,128,0.25); }
+  .t-dp-cv-ats.mid  { background:rgba(251,191,36,0.10);color:#fbbf24;border:1px solid rgba(251,191,36,0.25); }
+  .t-dp-cv-ats.low  { background:rgba(248,113,113,0.10);color:#f87171;border:1px solid rgba(248,113,113,0.25); }
+  .t-dp-email { background:rgba(34,211,238,0.04);border:1px solid rgba(34,211,238,0.09);border-radius:8px;padding:7px 10px;margin-bottom:5px; }
+  .t-dp-email-company { color:var(--text-1);font-size:0.73rem;font-weight:600; }
+  .t-dp-email-to { color:var(--text-3);font-size:0.67rem;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .t-dp-result { border-radius:8px;padding:6px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;font-size:0.72rem;font-weight:600; }
+  .t-dp-result.sent { background:rgba(74,222,128,0.07);border:1px solid rgba(74,222,128,0.18);color:#4ade80; }
+  .t-dp-result.fail { background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.18);color:#f87171; }
+
+  /* ══════════════ HISTORY ACTIVITY TAB ══════════════ */
+  .t-hist-tab-row { display:flex;gap:4px;padding:0 0 10px; }
+  .t-hist-tab { flex:1;padding:4px 0;background:none;border:1px solid rgba(34,197,94,0.10);border-radius:6px;color:var(--text-3);font-size:0.68rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s; }
+  .t-hist-tab.active { background:rgba(34,197,94,0.10);color:var(--text-accent);border-color:rgba(34,197,94,0.26); }
 `;
 
 
@@ -905,9 +956,9 @@ function PipelineProgress({currentState}) {
 }
 
 /* ─── Activity Panel ─────────────────────────────────────────────────────────── */
-function ActivityPanel({activityLog, currentState, isAsync}) {
+function ActivityPanel({activityLog, currentState, isAsync, rightTab, onTabChange, sessionJobs, sessionCvResults, sessionEmailDrafts, sessionSendResults, prepLoadingIdx, prepResultsMap, onInterviewPrep}) {
   const bottomRef = useRef(null);
-  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[activityLog]);
+  useEffect(()=>{ if(rightTab==='activity') bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[activityLog, rightTab]);
 
   const fmtTime = (ts) => {
     if(!ts) return '';
@@ -925,6 +976,38 @@ function ActivityPanel({activityLog, currentState, isAsync}) {
     ai:      { Icon: Brain,          color: '#4ade80' },
     info:    { Icon: Zap,            color: '#4ade80' },
   };
+
+  const renderLog = (log) => (
+    <div className="t-activity-log">
+      {log.length === 0 ? (
+        <div className="t-activity-empty">
+          <div className="t-activity-empty-icon">
+            <Activity style={{width:22,height:22,color:'var(--text-3)'}}/>
+          </div>
+          <p>Agent activity yahan dikhega</p>
+          <p style={{marginTop:6,fontSize:'0.67rem',color:'var(--text-3)'}}>CV upload karein to shuru ho jayega</p>
+        </div>
+      ) : (
+        log.map((item, idx) => {
+          const iconType = getActivityIcon(item.message);
+          const cfg = iconConfig[iconType] || iconConfig.info;
+          const { Icon: LogIcon } = cfg;
+          return (
+            <div key={item.id || idx} className="t-log-item">
+              <div className={`t-log-icon ${iconType}`}>
+                <LogIcon style={{width:14,height:14,color:cfg.color}} strokeWidth={2.5}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div className="t-log-msg">{item.message}</div>
+                <div className="t-log-time">{fmtTime(item.ts)}</div>
+              </div>
+            </div>
+          );
+        })
+      )}
+      <div ref={bottomRef}/>
+    </div>
+  );
 
   return (
     <div className="t-activity">
@@ -945,37 +1028,28 @@ function ActivityPanel({activityLog, currentState, isAsync}) {
         )}
       </div>
 
-      <PipelineProgress currentState={currentState}/>
-
-      <div className="t-activity-log">
-        {activityLog.length === 0 ? (
-          <div className="t-activity-empty">
-            <div className="t-activity-empty-icon">
-              <Activity style={{width:22,height:22,color:'var(--text-3)'}}/>
-            </div>
-            <p>Agent activity yahan dikhega</p>
-            <p style={{marginTop:6,fontSize:'0.67rem',color:'var(--text-3)'}}>CV upload karein to shuru ho jayega</p>
-          </div>
-        ) : (
-          activityLog.map((item, idx) => {
-            const iconType = getActivityIcon(item.message);
-            const cfg = iconConfig[iconType] || iconConfig.info;
-            const { Icon: LogIcon } = cfg;
-            return (
-              <div key={item.id || idx} className="t-log-item">
-                <div className={`t-log-icon ${iconType}`}>
-                  <LogIcon style={{width:14,height:14,color:cfg.color}} strokeWidth={2.5}/>
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div className="t-log-msg">{item.message}</div>
-                  <div className="t-log-time">{fmtTime(item.ts)}</div>
-                </div>
-              </div>
-            );
-          })
-        )}
-        <div ref={bottomRef}/>
+      {/* Tab buttons */}
+      <div className="t-rtab-row">
+        <button className={`t-rtab${rightTab==='activity'?' active':''}`} onClick={()=>onTabChange('activity')}>⚡ Activity</button>
+        <button className={`t-rtab${rightTab==='data'?' active':''}`} onClick={()=>onTabChange('data')}>📊 Data</button>
       </div>
+
+      {rightTab === 'activity' ? (
+        <>
+          <PipelineProgress currentState={currentState}/>
+          {renderLog(activityLog)}
+        </>
+      ) : (
+        <DataPanel
+          jobs={sessionJobs}
+          cvResults={sessionCvResults}
+          emailDrafts={sessionEmailDrafts}
+          sendResults={sessionSendResults}
+          prepLoadingIdx={prepLoadingIdx}
+          prepResultsMap={prepResultsMap}
+          onInterviewPrep={onInterviewPrep}
+        />
+      )}
     </div>
   );
 }
@@ -1733,6 +1807,129 @@ function ProfilePanel({open,onClose,user,onUpdateUser,onLogout}) {
   </>;
 }
 
+/* ─── Intro Overlay (Feature 3: login→chat animation) ───────────────────────── */
+function IntroOverlay({ onDone }) {
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    const t1 = setTimeout(() => setLeaving(true), 2000);
+    const t2 = setTimeout(() => { sessionStorage.setItem('talvion_intro_done', '1'); onDone(); }, 2500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [onDone]);
+  return (
+    <div className={`t-intro${leaving ? ' t-intro-out' : ''}`}>
+      <div className="t-intro-logo"><Sparkles size={52} color="#22c55e" /></div>
+      <div className="t-intro-wordmark">Talvion AI</div>
+      <div className="t-intro-tagline">Your personal job hunting agent</div>
+      <div className="t-intro-bar"><div className="t-intro-fill" /></div>
+    </div>
+  );
+}
+
+/* ─── Data Panel (Feature 2: pipeline data tab) ─────────────────────────────── */
+function DataPanel({ jobs, cvResults, emailDrafts, sendResults, prepLoadingIdx, prepResultsMap, onInterviewPrep }) {
+  const hasAny = jobs.length || cvResults.length || emailDrafts.length || sendResults.length;
+  if (!hasAny) {
+    return (
+      <div className="t-dp">
+        <div className="t-dp-empty">
+          <Activity style={{ width: 26, height: 26, color: 'var(--text-3)', marginBottom: 10 }} />
+          <p>Pipeline data yahan dikhega</p>
+          <p style={{ marginTop: 5, fontSize: '0.67rem' }}>Pipeline run karein to jobs, CVs aur emails nazar aayenge</p>
+        </div>
+      </div>
+    );
+  }
+
+  const atsClass = (score) => !score ? '' : score >= 75 ? 'high' : score >= 50 ? 'mid' : 'low';
+
+  return (
+    <div className="t-dp">
+      {/* Jobs */}
+      {jobs.length > 0 && (
+        <div className="t-dp-section">
+          <div className="t-dp-section-title">Jobs ({jobs.length})</div>
+          {jobs.map((job, idx) => {
+            const matchedCv = cvResults.find(r => r.job?.title === job.title && r.job?.company === job.company);
+            const questions = prepResultsMap[idx];
+            const isLoading = prepLoadingIdx === idx;
+            return (
+              <div key={idx} className="t-dp-job">
+                <div className="t-dp-job-title">{job.title || 'Unknown Role'}</div>
+                <div className="t-dp-job-company">{job.company || job.company_name || '—'}{job.location ? ` · ${job.location}` : ''}</div>
+                {matchedCv?.atsScore && (
+                  <div style={{ marginTop: 4 }}>
+                    <span className={`t-dp-cv-ats ${atsClass(matchedCv.atsScore)}`}>ATS {matchedCv.atsScore}%</span>
+                  </div>
+                )}
+                <button
+                  className="t-dp-prep-btn"
+                  onClick={() => onInterviewPrep(idx, job)}
+                  disabled={isLoading || !!questions}
+                >
+                  {isLoading ? '⏳ Generating...' : questions ? '✅ Prep Ready' : '🎯 Interview Prep'}
+                </button>
+                {questions && (
+                  <div className="t-dp-questions">
+                    {Object.entries(questions).map(([group, qs]) => qs?.length > 0 && (
+                      <div key={group}>
+                        <div className="t-dp-q-group">{group}</div>
+                        {qs.map((q, qi) => (
+                          <div key={qi} className="t-dp-q-item">{q}</div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* CVs */}
+      {cvResults.length > 0 && (
+        <div className="t-dp-section">
+          <div className="t-dp-section-title">CVs ({cvResults.length})</div>
+          {cvResults.map((r, idx) => (
+            <div key={idx} className="t-dp-cv">
+              <div className="t-dp-cv-info">
+                <div className="t-dp-cv-title">{r.job?.title || r.job?.company || `CV #${idx + 1}`}</div>
+                <div style={{ color: 'var(--text-3)', fontSize: '0.66rem', marginTop: 1 }}>{r.cv ? 'Generated' : 'Failed'}</div>
+              </div>
+              {r.atsScore && <span className={`t-dp-cv-ats ${atsClass(r.atsScore)}`}>ATS {r.atsScore}%</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Emails */}
+      {emailDrafts.length > 0 && (
+        <div className="t-dp-section">
+          <div className="t-dp-section-title">Emails ({emailDrafts.length})</div>
+          {emailDrafts.map((d, idx) => (
+            <div key={idx} className="t-dp-email">
+              <div className="t-dp-email-company">{d.job?.company || `Draft #${idx + 1}`}</div>
+              <div className="t-dp-email-to">{d.hrEmail ? `To: ${Array.isArray(d.hrEmail) ? d.hrEmail[0] : d.hrEmail}` : 'No email found'}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Send Results */}
+      {sendResults.length > 0 && (
+        <div className="t-dp-section">
+          <div className="t-dp-section-title">Results ({sendResults.length})</div>
+          {sendResults.map((r, idx) => (
+            <div key={idx} className={`t-dp-result ${r.success ? 'sent' : 'fail'}`}>
+              {r.success ? '✅' : '❌'} {r.company || `Application #${idx + 1}`}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    MAIN FTE CHAT COMPONENT
 ═══════════════════════════════════════════════════════════════════════════ */
@@ -1756,6 +1953,21 @@ export default function FTEChat() {
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [viewingHistory,setViewingHistory]=useState(null);
   const [historyMessages,setHistoryMessages]=useState([]);
+  const [historyTab,setHistoryTab]=useState('messages');
+
+  // Feature 3: intro animation
+  const [introPlaying,setIntroPlaying]=useState(()=>!sessionStorage.getItem('talvion_intro_done'));
+
+  // Feature 2: right panel tabs + session data
+  const [rightTab,setRightTab]=useState('activity');
+  const [sessionJobs,setSessionJobs]=useState([]);
+  const [sessionCvResults,setSessionCvResults]=useState([]);
+  const [sessionEmailDrafts,setSessionEmailDrafts]=useState([]);
+  const [sessionSendResults,setSessionSendResults]=useState([]);
+
+  // Feature 4: interview prep per job
+  const [prepLoadingIdx,setPrepLoadingIdx]=useState(null);
+  const [prepResultsMap,setPrepResultsMap]=useState({});
 
   const [ollamaMessages,setOllamaMessages]=useState([]);
   const [ollamaSending,setOllamaSending]=useState(false);
@@ -1809,6 +2021,10 @@ export default function FTEChat() {
   useEffect(()=>{
     fteApi.getState().then(res=>{const s=res.data;setCurrentState(s.state||'waiting_cv');
       if(s.activityLog) mergeActivityLog(s.activityLog);
+      if(s.jobs?.length)        setSessionJobs(s.jobs);
+      if(s.cvResults?.length)   setSessionCvResults(s.cvResults);
+      if(s.emailDrafts?.length) setSessionEmailDrafts(s.emailDrafts);
+      if(s.sendResults?.length) setSessionSendResults(s.sendResults);
       if(!s.state||s.state==='waiting_cv') addBotMessage('text','Assalam o Alaikum! Main aapka **Talvion AI** hoon.\n\nMain automatically:\n• Jobs dhundhta hoon (SerpAPI)\n• Tailored CVs banata hoon (AI)\n• HR ko emails bhejta hoon\n\nShuru karne ke liye — apni **CV (PDF)** upload karein.');
       else if(s.state==='cv_uploaded') addBotMessage('text','CV already upload hai. Batayein — **kaunsi role aur kaunse city** mein job chahiye?\n_(misaal: "Software Engineer Karachi")_');
       else if(s.state==='asking_location') addBotMessage('text',`Role: **${s.role}**\n\nAb **kaunse city** mein job chahiye?`);
@@ -1823,6 +2039,10 @@ export default function FTEChat() {
     if(!ASYNC_STATES.has(currentState)){if(pollingRef.current){clearInterval(pollingRef.current);pollingRef.current=null;}return;}
     pollingRef.current=setInterval(async()=>{try{const res=await fteApi.getState();const s=res.data;
       if(s.activityLog) mergeActivityLog(s.activityLog);
+      if(s.jobs?.length)        setSessionJobs(s.jobs);
+      if(s.cvResults?.length)   setSessionCvResults(s.cvResults);
+      if(s.emailDrafts?.length) setSessionEmailDrafts(s.emailDrafts);
+      if(s.sendResults?.length) setSessionSendResults(s.sendResults);
       if(s.state===currentState){if(s.error){setCurrentState('cv_uploaded');pushLocalActivity(`❌ Error: ${s.error}`,'error');addBotMessage('text',`Masla aaya: ${s.error}\n\n**New Chat** button se dobara try karein.`);}return;}
       setCurrentState(s.state);
       if(s.error&&!ASYNC_STATES.has(s.state)){pushLocalActivity(`❌ Pipeline error: ${s.error}`,'error');addBotMessage('text',`${s.error}\n\nRole ya city change karke **New Chat** se dobara try karein.`);return;}
@@ -1868,30 +2088,38 @@ export default function FTEChat() {
   };
 
   const handleKeyDown=(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}};
-  const handleNewChat=async()=>{try{await fteApi.reset();setMessages([]);setActivityLog([]);setCurrentState('waiting_cv');setTimeout(()=>addBotMessage('text','Nayi chat shuru! Apni **CV (PDF)** upload karein.'),50);}catch{toast.error('Reset fail ho gaya');}};
+  const handleNewChat=async()=>{try{await fteApi.reset();setMessages([]);setActivityLog([]);setCurrentState('waiting_cv');setSessionJobs([]);setSessionCvResults([]);setSessionEmailDrafts([]);setSessionSendResults([]);setPrepResultsMap({});setTimeout(()=>addBotMessage('text','Nayi chat shuru! Apni **CV (PDF)** upload karein.'),50);}catch{toast.error('Reset fail ho gaya');}};
   const handleApproveCVs=async(id)=>{setApprovalLoading(true);try{await fteApi.approveCVs(id);pushLocalActivity('✅ CVs approve ho gayi — HR emails dhundh raha hoon...','success');setCurrentState('finding_emails');addBotMessage('status','CVs approved! HR emails dhundh raha hoon...');}catch(err){const msg=err.response?.data?.error||'Approve fail ho gaya';pushLocalActivity(`❌ CV approve error: ${msg}`,'error');toast.error(msg);}finally{setApprovalLoading(false);}};
   const handleSendEmails=async(id,drafts)=>{setApprovalLoading(true);try{await fteApi.approveEmails(id,drafts);pushLocalActivity('📤 Emails approved — bhejna shuru ho gaya...','info');setCurrentState('sending');addBotMessage('status','Emails bhej raha hoon...');}catch(err){const msg=err.response?.data?.error||'Send fail ho gaya';pushLocalActivity(`❌ Email send error: ${msg}`,'error');toast.error(msg);}finally{setApprovalLoading(false);}};
-  const handleReject=async()=>{try{await fteApi.reset();setCurrentState('waiting_cv');pushLocalActivity('⚠️ Cancel ho gaya — naya session shuru...','warn');addBotMessage('text','Cancel ho gaya. Dobara shuru karne ke liye CV upload karein.');}catch{toast.error('Cancel fail ho gaya');}};
+  const handleReject=async()=>{try{await fteApi.reset();setCurrentState('waiting_cv');setSessionJobs([]);setSessionCvResults([]);setSessionEmailDrafts([]);setSessionSendResults([]);setPrepResultsMap({});pushLocalActivity('⚠️ Cancel ho gaya — naya session shuru...','warn');addBotMessage('text','Cancel ho gaya. Dobara shuru karne ke liye CV upload karein.');}catch{toast.error('Cancel fail ho gaya');}};
   const handleFileChange=(e)=>{const f=e.target.files[0];if(f){setCvFile(f);setTimeout(()=>handleSend(''),100);}};
 
   const handleLoadHistory=useCallback((session)=>{
     if(!session)return;
     const converted=(session.messages||[]).map((m,i)=>({id:`hist_${i}_${Date.now()}`,role:m.role,type:m.type||'text',content:m.content,data:m.data||null,ts:m.ts?new Date(m.ts):new Date()}));
     setHistoryMessages(converted);
-    setViewingHistory({role:session.role,location:session.location,completedAt:session.completedAt});
+    setHistoryTab('messages');
+    setViewingHistory({role:session.role,location:session.location,completedAt:session.completedAt,activityLog:session.activityLog||[]});
   },[]);
-  const handleExitHistory=useCallback(()=>{setViewingHistory(null);setHistoryMessages([]);},[]);
+  const handleExitHistory=useCallback(()=>{setViewingHistory(null);setHistoryMessages([]);setHistoryTab('messages');},[]);
   const handleRestartFromHistory=useCallback(async()=>{
     const role=viewingHistory?.role;const location=viewingHistory?.location;
     setViewingHistory(null);setHistoryMessages([]);
     try{
-      await fteApi.reset();setMessages([]);setActivityLog([]);setCurrentState('waiting_cv');
+      await fteApi.reset();setMessages([]);setActivityLog([]);setCurrentState('waiting_cv');setSessionJobs([]);setSessionCvResults([]);setSessionEmailDrafts([]);setSessionSendResults([]);setPrepResultsMap({});
       setTimeout(()=>{
         addBotMessage('text','Fresh start! Please upload your **CV (PDF)** to begin.');
         if(role&&location) setTimeout(()=>addBotMessage('text',`_Last session: **${role}** in **${location}**. After uploading your CV, I will search again!_`),300);
       },50);
     }catch{toast.error('Reset failed');}
   },[viewingHistory,addBotMessage]);
+
+  const handleInterviewPrep=useCallback(async(jobIdx,job)=>{
+    setPrepLoadingIdx(jobIdx);
+    try{const res=await fteApi.interviewPrep(job);if(res.data.success){setPrepResultsMap(prev=>({...prev,[jobIdx]:res.data.questions}));}}
+    catch{toast.error('Interview prep fail ho gaya');}
+    finally{setPrepLoadingIdx(null);}
+  },[]);
 
   const isDisabled=mode==='ollama'?(ollamaSending||!!viewingHistory):(sending||ASYNC_STATES.has(currentState)||!!viewingHistory);
   const meta=STATE_META[currentState]||STATE_META.waiting_cv;
@@ -1900,6 +2128,7 @@ export default function FTEChat() {
 
   return <>
     <style>{STYLES}</style>
+    {introPlaying&&<IntroOverlay onDone={()=>setIntroPlaying(false)}/>}
     <div className={`t-root${theme==='light'?' light':''}`}>
       <HistorySidebar open={historyOpen} onClose={()=>setHistoryOpen(false)} onLoad={handleLoadHistory}/>
       <ProfilePanel open={profileOpen} onClose={()=>setProfileOpen(false)} user={user} onUpdateUser={updateUser} onLogout={logout}/>
@@ -1996,17 +2225,32 @@ export default function FTEChat() {
                   {ollamaSending&&<div className="t-ollama-row"><div className="t-ollama-icon"><Brain style={{width:16,height:16,color:'white'}}/></div><div className="t-ollama-bubble"><TypingDots/></div></div>}
                 </>
               ):viewingHistory?(
-                historyMessages.length===0
-                  ?<div className="t-empty"><div className="t-empty-icon"><Bot style={{width:30,height:30,color:'white'}}/></div><h2>No messages</h2><p className="t-empty-sub">This session has no saved conversation.</p></div>
-                  :historyMessages.map(msg=>{
-                    if(msg.role==='user') return <UserMessage key={msg.id}>{msg.content}</UserMessage>;
-                    if(msg.type==='cv_approval'&&msg.data?.cvResults) return <BotMessage key={msg.id}><CVApprovalCards cvResults={msg.data.cvResults} approvalId={msg.data.cvReviewApprovalId} readOnly/></BotMessage>;
-                    if(msg.type==='email_approval'&&msg.data?.emailDrafts) return <BotMessage key={msg.id}><EmailApprovalCards emailDrafts={msg.data.emailDrafts} approvalId={msg.data.emailReviewApprovalId} readOnly/></BotMessage>;
-                    if(msg.type==='result'&&msg.data?.sendResults) return <BotMessage key={msg.id}><SendResults results={msg.data.sendResults}/></BotMessage>;
-                    if(msg.type==='prep_questions'&&msg.data?.prepResults) return <BotMessage key={msg.id}><PrepQuestionsCard prepResults={msg.data.prepResults}/></BotMessage>;
-                    if(msg.type==='status') return <StatusMessage key={msg.id}>{msg.content}</StatusMessage>;
-                    return <BotMessage key={msg.id}><BotText text={msg.content}/></BotMessage>;
-                  })
+                <>
+                  <div className="t-hist-tab-row">
+                    <button className={`t-hist-tab${historyTab==='messages'?' active':''}`} onClick={()=>setHistoryTab('messages')}>💬 Messages</button>
+                    <button className={`t-hist-tab${historyTab==='activity'?' active':''}`} onClick={()=>setHistoryTab('activity')}>⚡ Activity</button>
+                  </div>
+                  {historyTab==='messages'?(
+                    historyMessages.length===0
+                      ?<div className="t-empty"><div className="t-empty-icon"><Bot style={{width:30,height:30,color:'white'}}/></div><h2>No messages</h2><p className="t-empty-sub">This session has no saved conversation.</p></div>
+                      :historyMessages.map(msg=>{
+                        if(msg.role==='user') return <UserMessage key={msg.id}>{msg.content}</UserMessage>;
+                        if(msg.type==='cv_approval'&&msg.data?.cvResults) return <BotMessage key={msg.id}><CVApprovalCards cvResults={msg.data.cvResults} approvalId={msg.data.cvReviewApprovalId} readOnly/></BotMessage>;
+                        if(msg.type==='email_approval'&&msg.data?.emailDrafts) return <BotMessage key={msg.id}><EmailApprovalCards emailDrafts={msg.data.emailDrafts} approvalId={msg.data.emailReviewApprovalId} readOnly/></BotMessage>;
+                        if(msg.type==='result'&&msg.data?.sendResults) return <BotMessage key={msg.id}><SendResults results={msg.data.sendResults}/></BotMessage>;
+                        if(msg.type==='prep_questions'&&msg.data?.prepResults) return <BotMessage key={msg.id}><PrepQuestionsCard prepResults={msg.data.prepResults}/></BotMessage>;
+                        if(msg.type==='status') return <StatusMessage key={msg.id}>{msg.content}</StatusMessage>;
+                        return <BotMessage key={msg.id}><BotText text={msg.content}/></BotMessage>;
+                      })
+                  ):(
+                    (viewingHistory.activityLog||[]).length===0
+                      ?<div className="t-empty"><div className="t-empty-icon"><Activity style={{width:28,height:28,color:'var(--text-3)'}}/></div><h2 style={{fontSize:'0.9rem'}}>No activity log</h2><p className="t-empty-sub">This session was saved before activity logging was added.</p></div>
+                      :(viewingHistory.activityLog||[]).map((item,idx)=>{
+                        const iconType=getActivityIcon(item.message);
+                        return <div key={item.id||idx} className="t-log-item"><div className={`t-log-icon ${iconType}`}><Zap style={{width:14,height:14,color:'var(--text-accent)'}}/></div><div style={{flex:1,minWidth:0}}><div className="t-log-msg">{item.message}</div><div className="t-log-time">{item.ts?new Date(item.ts).toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):''}</div></div></div>;
+                      })
+                  )}
+                </>
               ):(
                 <>
                   {messages.length===0&&<div className="t-empty">
@@ -2078,6 +2322,15 @@ export default function FTEChat() {
             activityLog={activityLog}
             currentState={currentState}
             isAsync={ASYNC_STATES.has(currentState)}
+            rightTab={rightTab}
+            onTabChange={setRightTab}
+            sessionJobs={sessionJobs}
+            sessionCvResults={sessionCvResults}
+            sessionEmailDrafts={sessionEmailDrafts}
+            sessionSendResults={sessionSendResults}
+            prepLoadingIdx={prepLoadingIdx}
+            prepResultsMap={prepResultsMap}
+            onInterviewPrep={handleInterviewPrep}
           />
         )}
       </div>

@@ -255,4 +255,23 @@ router.put('/settings', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/fte/interview-prep
+ * Generate interview prep questions for a specific job
+ * Body: { job: { title, company, ... } }
+ */
+router.post('/interview-prep', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { job } = req.body;
+    if (!job?.title) return res.status(400).json({ success: false, error: 'Job data required' });
+    const prepAgent = require('../agents/prep');
+    const result = await prepAgent.generateQuestions(userId, { targetJob: job.title, companyName: job.company || '', count: 10 }, null);
+    res.json({ success: true, questions: result.questions });
+  } catch (err) {
+    console.error('FTE interview-prep error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
