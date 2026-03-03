@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', token);
       setUser(user);
       
-      return { success: true };
+      return { success: true, user };
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Login failed';
       setError(errorMessage);
@@ -57,11 +57,11 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       const response = await authAPI.register(userData);
       const { token, user } = response.data;
-      
+
       localStorage.setItem('token', token);
       setUser(user);
-      
-      return { success: true };
+
+      return { success: true, user };
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Registration failed';
       setError(errorMessage);

@@ -32,6 +32,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/job-appli
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/fte', require('./routes/fte'));
+app.use('/api/admin', require('./routes/admin'));
 app.use('/api/test', require('./routes/test'));
 
 // File upload handling

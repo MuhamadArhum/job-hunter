@@ -108,6 +108,18 @@ const userSchema = new mongoose.Schema({
     type: Date,
     select: false,
   },
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user',
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+  },
+  lastLogin: {
+    type: Date,
+  },
   gmailCredentials: {
     type: mongoose.Schema.Types.Mixed,
     default: null,

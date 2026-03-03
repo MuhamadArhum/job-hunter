@@ -11,7 +11,7 @@ import {
   User, Key, Save, Edit3, Shield, Download,
   Sparkles, Zap, Brain, Activity, Search,
   FileCheck, AtSign, Rocket, ArrowRight, AlertTriangle, Settings,
-  ToggleLeft, ToggleRight, Sun, Moon, Palette, Users,
+  ToggleLeft, ToggleRight, Sun, Moon, Palette, Users, Phone, Link, DollarSign,
 } from 'lucide-react';
 
 const ASYNC_STATES = new Set(['searching', 'generating_cvs', 'finding_emails', 'sending', 'preparing_interview']);
@@ -797,17 +797,61 @@ const STYLES = `
 
   /* ── Approve label ── */
   .t-approve-label { color: var(--text-1); font-weight: 700; font-size: 0.9rem; }
+
+  /* ══════════════ ANIMATIONS ══════════════ */
+  @keyframes tPageIn    { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes tStaggerIn { from{opacity:0;transform:translateY(10px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+  @keyframes tShimmer   { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+  @keyframes tGradShift { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+
+  .t-page-enter { animation: tPageIn 0.4s cubic-bezier(0.16,1,0.3,1) both; }
+
+  .t-stagger {
+    animation: tStaggerIn 0.35s cubic-bezier(0.16,1,0.3,1) both;
+    animation-fill-mode: both;
+  }
+
+  .t-shimmer {
+    background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-hover) 50%, var(--bg-raised) 75%);
+    background-size: 800px 100%;
+    animation: tShimmer 1.6s infinite linear;
+  }
+
+  .t-hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .t-hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(34,197,94,0.22);
+  }
+
+  .t-glass {
+    backdrop-filter: blur(18px);
+    background: rgba(11,33,24,0.72);
+    border: 1px solid rgba(34,197,94,0.18);
+  }
+
+  .t-ripple { position: relative; overflow: hidden; }
+  .t-ripple::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .t-ripple:active::after { opacity: 1; }
 `;
+
 
 /* ─── Tiny helpers ───────────────────────────────────────────────────────────── */
 function TypingDots() {
   return <div style={{display:'flex',gap:5,alignItems:'center',padding:'3px 2px'}}>{[0,1,2].map(i=><div key={i} className="t-dot" style={{animationDelay:`${i*0.18}s`}}/>)}</div>;
 }
-function BotMessage({children,isLoading}) {
-  return <div className="t-bot-row"><div className="t-bot-icon"><Bot style={{width:15,height:15,color:'white'}}/></div><div className="t-bot-bubble">{isLoading?<TypingDots/>:children}</div></div>;
+function BotMessage({children,isLoading,animDelay}) {
+  return <div className="t-bot-row t-stagger" style={{animationDelay:animDelay||'0s'}}><div className="t-bot-icon"><Bot style={{width:15,height:15,color:'white'}}/></div><div className={`t-bot-bubble${isLoading?' t-shimmer':''}`}>{isLoading?<TypingDots/>:children}</div></div>;
 }
-function UserMessage({children}) {
-  return <div className="t-user-row"><div className="t-user-bubble">{children}</div></div>;
+function UserMessage({children,animDelay}) {
+  return <div className="t-user-row t-stagger" style={{animationDelay:animDelay||'0s'}}><div className="t-user-bubble">{children}</div></div>;
 }
 function StatusMessage({children}) {
   return <div className="t-status-row"><div className="t-status-pill"><Loader2 style={{width:13,height:13}} className="t-spin"/>{children}</div></div>;
@@ -938,8 +982,15 @@ function ActivityPanel({activityLog, currentState, isAsync}) {
 
 /* ─── Settings Modal ─────────────────────────────────────────────────────────── */
 const DEFAULT_SETTINGS_FE = {
+  // Profile
+  phone: '', linkedinUrl: '', portfolioUrl: '', defaultCVTemplate: 'modern',
+  // Job Prefs
   maxJobs: 5, defaultRole: '', defaultCity: '', jobType: 'any',
+  preferredRoles: [], preferredLocations: [], salaryMin: 0, salaryMax: 0, salaryCurrency: 'USD',
+  // Email
   emailSignature: '', ccMyself: false, emailLanguage: 'english',
+  emailTone: 'professional', customEmailTemplate: '',
+  // Pipeline
   minAtsScore: 0, autoApproveCvs: false, autoApproveAts: 80,
 };
 
@@ -954,7 +1005,7 @@ function Toggle({on, onToggle}) {
 }
 
 function SettingsPanel({open, onClose, theme, onThemeChange}) {
-  const [tab, setTab] = useState('job');
+  const [tab, setTab] = useState('profile');
   const [s, setS] = useState(DEFAULT_SETTINGS_FE);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -979,7 +1030,8 @@ function SettingsPanel({open, onClose, theme, onThemeChange}) {
   };
 
   const TABS = [
-    { id: 'job',        label: 'Job Prefs',  icon: Search },
+    { id: 'profile',    label: 'Profile',     icon: User },
+    { id: 'job',        label: 'Job Prefs',   icon: Search },
     { id: 'email',      label: 'Email',       icon: Mail },
     { id: 'pipeline',   label: 'Pipeline',    icon: Zap },
     { id: 'appearance', label: 'Appearance',  icon: Palette },
@@ -1017,6 +1069,42 @@ function SettingsPanel({open, onClose, theme, onThemeChange}) {
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'60px 0',gap:8,color:'var(--text-3)',fontSize:'0.82rem'}}>
               <Loader2 style={{width:16,height:16}} className="t-spin"/>Loading settings...
             </div>
+          ) : tab === 'profile' ? (
+            <>
+              <div className="t-sfield">
+                <label className="t-slabel">Phone Number</label>
+                <p className="t-sdesc">Contact number (optional)</p>
+                <div style={{position:'relative'}}>
+                  <Phone style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',width:14,height:14,color:'var(--text-3)'}}/>
+                  <input className="t-sinput" style={{paddingLeft:32}} value={s.phone} onChange={e=>upd('phone',e.target.value)} placeholder="+92-300-1234567"/>
+                </div>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">LinkedIn URL</label>
+                <p className="t-sdesc">Your LinkedIn profile link</p>
+                <div style={{position:'relative'}}>
+                  <Link style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',width:14,height:14,color:'var(--text-3)'}}/>
+                  <input className="t-sinput" style={{paddingLeft:32}} value={s.linkedinUrl} onChange={e=>upd('linkedinUrl',e.target.value)} placeholder="https://linkedin.com/in/username"/>
+                </div>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Portfolio / Website</label>
+                <p className="t-sdesc">Your portfolio or personal website</p>
+                <div style={{position:'relative'}}>
+                  <Link style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',width:14,height:14,color:'var(--text-3)'}}/>
+                  <input className="t-sinput" style={{paddingLeft:32}} value={s.portfolioUrl} onChange={e=>upd('portfolioUrl',e.target.value)} placeholder="https://yourportfolio.com"/>
+                </div>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Default CV Template</label>
+                <p className="t-sdesc">Generated CVs ka default template style</p>
+                <select className="t-sselect" value={s.defaultCVTemplate} onChange={e=>upd('defaultCVTemplate',e.target.value)}>
+                  <option value="modern">Modern</option>
+                  <option value="classic">Classic</option>
+                  <option value="minimal">Minimal</option>
+                </select>
+              </div>
+            </>
           ) : tab === 'job' ? (
             <>
               <div className="t-sfield">
@@ -1046,6 +1134,37 @@ function SettingsPanel({open, onClose, theme, onThemeChange}) {
                   <option value="hybrid">Hybrid</option>
                 </select>
               </div>
+              <div className="t-sdivider"/>
+              <div className="t-sfield">
+                <label className="t-slabel">Preferred Roles</label>
+                <p className="t-sdesc">Comma-separated — e.g. "Software Engineer, Backend Developer"</p>
+                <input className="t-sinput"
+                  value={Array.isArray(s.preferredRoles)?s.preferredRoles.join(', '):s.preferredRoles}
+                  onChange={e=>upd('preferredRoles',e.target.value.split(',').map(v=>v.trim()).filter(Boolean))}
+                  placeholder="Software Engineer, Backend Developer"/>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Preferred Locations</label>
+                <p className="t-sdesc">Comma-separated — e.g. "Karachi, Lahore, Remote"</p>
+                <input className="t-sinput"
+                  value={Array.isArray(s.preferredLocations)?s.preferredLocations.join(', '):s.preferredLocations}
+                  onChange={e=>upd('preferredLocations',e.target.value.split(',').map(v=>v.trim()).filter(Boolean))}
+                  placeholder="Karachi, Lahore, Remote"/>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Salary Range</label>
+                <p className="t-sdesc">Expected salary range (0 = not set)</p>
+                <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr auto',gap:8,alignItems:'center'}}>
+                  <input type="number" className="t-sinput" style={{textAlign:'center'}} value={s.salaryMin} onChange={e=>upd('salaryMin',+e.target.value)} placeholder="Min" min={0}/>
+                  <span style={{color:'var(--text-3)',fontSize:'0.78rem',fontWeight:600}}>–</span>
+                  <input type="number" className="t-sinput" style={{textAlign:'center'}} value={s.salaryMax} onChange={e=>upd('salaryMax',+e.target.value)} placeholder="Max" min={0}/>
+                  <select className="t-sselect" style={{width:'auto'}} value={s.salaryCurrency} onChange={e=>upd('salaryCurrency',e.target.value)}>
+                    <option value="USD">USD</option>
+                    <option value="PKR">PKR</option>
+                    <option value="GBP">GBP</option>
+                  </select>
+                </div>
+              </div>
             </>
           ) : tab === 'email' ? (
             <>
@@ -1069,6 +1188,21 @@ function SettingsPanel({open, onClose, theme, onThemeChange}) {
                   <option value="english">English</option>
                   <option value="urdu">Urdu</option>
                 </select>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Email Tone</label>
+                <p className="t-sdesc">Job application emails ka tone</p>
+                <select className="t-sselect" value={s.emailTone} onChange={e=>upd('emailTone',e.target.value)}>
+                  <option value="professional">Professional</option>
+                  <option value="formal">Formal</option>
+                  <option value="casual">Casual</option>
+                </select>
+              </div>
+              <div className="t-sfield">
+                <label className="t-slabel">Custom Email Template</label>
+                <p className="t-sdesc">Available variables: {'{{name}}'} {'{{company}}'} {'{{role}}'} {'{{skills}}'}</p>
+                <textarea className="t-sinput t-stextarea" rows={6} value={s.customEmailTemplate} onChange={e=>upd('customEmailTemplate',e.target.value)}
+                  placeholder={'Dear Hiring Manager,\n\nI am writing to express my interest in the {{role}} position at {{company}}...\n\nBest regards,\n{{name}}'}/>
               </div>
             </>
           ) : tab === 'pipeline' ? (
@@ -1152,7 +1286,7 @@ function SettingsPanel({open, onClose, theme, onThemeChange}) {
             saved ? (
               <div className="t-ssaved"><CheckCircle style={{width:14,height:14}}/> Settings save ho gayi!</div>
             ) : (
-              <button className="t-ssave-btn" onClick={save} disabled={saving}>
+              <button className="t-ssave-btn t-ripple" onClick={save} disabled={saving}>
                 {saving ? <><Loader2 style={{width:13,height:13}} className="t-spin"/>Saving...</> : <><Save style={{width:13,height:13}}/>Save Settings</>}
               </button>
             )
@@ -1192,7 +1326,7 @@ function CVApprovalCards({cvResults,approvalId,onApprove,onReject,loading,readOn
       {cvResults.map((result,idx)=>{
         const score=result.atsScore?.overall??result.atsScore?.format??null;
         const cv=result.cv||{}; const isOpen=expanded===idx;
-        return <div key={idx} className="t-card">
+        return <div key={idx} className="t-card t-hover-lift">
           <button className="t-card-btn" onClick={()=>setExpanded(isOpen?null:idx)}>
             <div style={{flex:1,minWidth:0}}>
               <p className="t-card-title">{result.job?.title||'Unknown Role'}</p>
@@ -1243,7 +1377,7 @@ function CVApprovalCards({cvResults,approvalId,onApprove,onReject,loading,readOn
           <CheckCircle style={{width:14,height:14,color:'var(--success)'}}/><span style={{color:'var(--success)',fontSize:'0.8rem',fontWeight:700}}>Approved — {valid.length} CV{valid.length!==1?'s':''} generated</span>
         </div>
       :<div style={{display:'flex',gap:8}}>
-          <button className="t-approve-btn" onClick={()=>onApprove(approvalId)} disabled={loading||valid.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="t-spin"/>Approving...</>:<><CheckCircle style={{width:14,height:14}}/>Approve {valid.length} CV{valid.length!==1?'s':''}</>}</button>
+          <button className="t-approve-btn t-ripple" onClick={()=>onApprove(approvalId)} disabled={loading||valid.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="t-spin"/>Approving...</>:<><CheckCircle style={{width:14,height:14}}/>Approve {valid.length} CV{valid.length!==1?'s':''}</>}</button>
           <button className="t-cancel-btn" onClick={()=>onReject()} disabled={loading}><XCircle style={{width:13,height:13}}/>Cancel</button>
         </div>
     }
@@ -1276,7 +1410,7 @@ function EmailApprovalCards({emailDrafts,approvalId,onSend,onReject,loading,read
         const recipients = (draft.hrEmails && draft.hrEmails.length > 0) ? draft.hrEmails : [draft.hrEmail];
         const isMulti = recipients.length > 1;
         const isExec = draft.emailType === 'exec';
-        return <div key={idx} className="t-card">
+        return <div key={idx} className="t-card t-hover-lift">
           <button className="t-card-btn" onClick={()=>setExpanded(expanded===idx?null:idx)}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
@@ -1323,7 +1457,7 @@ function EmailApprovalCards({emailDrafts,approvalId,onSend,onReject,loading,read
           <Send style={{width:14,height:14,color:'var(--success)'}}/><span style={{color:'var(--text-accent)',fontSize:'0.8rem',fontWeight:700}}>Sent — {drafts.length} application{drafts.length!==1?'s':''} dispatched</span>
         </div>
       :<div style={{display:'flex',gap:8}}>
-          <button className="t-send-email-btn" onClick={()=>onSend(approvalId,drafts)} disabled={loading||drafts.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="t-spin"/>Sending...</>:<><Send style={{width:14,height:14}}/>Send {totalSends} Email{totalSends!==1?'s':''}</>}</button>
+          <button className="t-send-email-btn t-ripple" onClick={()=>onSend(approvalId,drafts)} disabled={loading||drafts.length===0}>{loading?<><Loader2 style={{width:14,height:14}} className="t-spin"/>Sending...</>:<><Send style={{width:14,height:14}}/>Send {totalSends} Email{totalSends!==1?'s':''}</>}</button>
           <button className="t-cancel-btn" onClick={()=>onReject()} disabled={loading}><XCircle style={{width:13,height:13}}/>Cancel</button>
         </div>
     }
@@ -1891,14 +2025,15 @@ export default function FTEChat() {
                       ))}
                     </div>
                   </div>}
-                  {messages.map(msg=>{
-                    if(msg.role==='user') return <UserMessage key={msg.id}>{msg.content}</UserMessage>;
+                  {messages.map((msg,idx)=>{
+                    const delay=`${Math.min(idx*0.06,0.3)}s`;
+                    if(msg.role==='user') return <UserMessage key={msg.id} animDelay={delay}>{msg.content}</UserMessage>;
                     if(msg.type==='status') return <StatusMessage key={msg.id}>{msg.content}</StatusMessage>;
-                    if(msg.type==='cv_approval'&&msg.data?.cvResults) return <BotMessage key={msg.id}><CVApprovalCards cvResults={msg.data.cvResults} approvalId={msg.data.cvReviewApprovalId} onApprove={handleApproveCVs} onReject={handleReject} loading={approvalLoading}/></BotMessage>;
-                    if(msg.type==='email_approval'&&msg.data?.emailDrafts) return <BotMessage key={msg.id}><EmailApprovalCards emailDrafts={msg.data.emailDrafts} approvalId={msg.data.emailReviewApprovalId} onSend={handleSendEmails} onReject={handleReject} loading={approvalLoading}/></BotMessage>;
-                    if(msg.type==='result'&&msg.data?.sendResults) return <BotMessage key={msg.id}><SendResults results={msg.data.sendResults} onNewChat={handleNewChat}/></BotMessage>;
-                    if(msg.type==='prep_questions'&&msg.data?.prepResults) return <BotMessage key={msg.id}><PrepQuestionsCard prepResults={msg.data.prepResults}/></BotMessage>;
-                    return <BotMessage key={msg.id}><BotText text={msg.content}/></BotMessage>;
+                    if(msg.type==='cv_approval'&&msg.data?.cvResults) return <BotMessage key={msg.id} animDelay={delay}><CVApprovalCards cvResults={msg.data.cvResults} approvalId={msg.data.cvReviewApprovalId} onApprove={handleApproveCVs} onReject={handleReject} loading={approvalLoading}/></BotMessage>;
+                    if(msg.type==='email_approval'&&msg.data?.emailDrafts) return <BotMessage key={msg.id} animDelay={delay}><EmailApprovalCards emailDrafts={msg.data.emailDrafts} approvalId={msg.data.emailReviewApprovalId} onSend={handleSendEmails} onReject={handleReject} loading={approvalLoading}/></BotMessage>;
+                    if(msg.type==='result'&&msg.data?.sendResults) return <BotMessage key={msg.id} animDelay={delay}><SendResults results={msg.data.sendResults} onNewChat={handleNewChat}/></BotMessage>;
+                    if(msg.type==='prep_questions'&&msg.data?.prepResults) return <BotMessage key={msg.id} animDelay={delay}><PrepQuestionsCard prepResults={msg.data.prepResults}/></BotMessage>;
+                    return <BotMessage key={msg.id} animDelay={delay}><BotText text={msg.content}/></BotMessage>;
                   })}
                   {sending&&<BotMessage isLoading/>}
                 </>
@@ -1928,7 +2063,7 @@ export default function FTEChat() {
                       :ASYNC_STATES.has(currentState)?'Kaam ho raha hai, thodi der wait karein...'
                       :'Yahan likhein... (Enter = send, Shift+Enter = newline)'
                   }/>
-                <button onClick={handleSend} disabled={isDisabled||(!input.trim()&&(mode==='ollama'||!cvFile))} className="t-send-btn">
+                <button onClick={handleSend} disabled={isDisabled||(!input.trim()&&(mode==='ollama'||!cvFile))} className="t-send-btn t-ripple">
                   {(mode==='ollama'?ollamaSending:sending)?<Loader2 style={{width:16,height:16}} className="t-spin"/>:<Send style={{width:16,height:16}}/>}
                 </button>
               </div>

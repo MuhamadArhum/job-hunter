@@ -4,11 +4,13 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import FTEChat from './pages/FTEChat';
+import AdminDashboard from './pages/AdminDashboard';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -20,7 +22,7 @@ const queryClient = new QueryClient({
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/chat" replace />;
+  if (user) return <Navigate to={user.role === 'admin' ? '/admin' : '/chat'} replace />;
   return children;
 }
 
@@ -32,6 +34,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
       <Route path="/reset-password"  element={<ResetPassword />} />
       <Route path="/chat"            element={<ProtectedRoute><FTEChat /></ProtectedRoute>} />
+      <Route path="/admin"           element={<AdminRoute><AdminDashboard /></AdminRoute>} />
       <Route path="*"                element={<Navigate to="/chat" replace />} />
     </Routes>
   );

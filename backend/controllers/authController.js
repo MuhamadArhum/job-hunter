@@ -4,8 +4,8 @@ const { validationResult } = require('express-validator');
 const User = require('../models/User');
 const { emailService } = require('../services/emailService');
 
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+const generateToken = (userId, role = 'user') => {
+  return jwt.sign({ userId, role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '30d'
   });
 };
@@ -25,15 +25,16 @@ const register = async (req, res) => {
       return res.status(400).json({ error: 'An account with this email already exists' });
     }
 
-    const user = new User({ name, email, password });
+    const role = process.env.ADMIN_EMAIL && email.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase() ? 'admin' : 'user';
+    const user = new User({ name, email, password, role });
     await user.save();
 
-    const token = generateToken(user._id);
+    const token = generateToken(user._id, user.role);
 
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: { id: user._id, name: user.name, email: user.email }
+      user: { id: user._id, name: user.name, email: user.email, role: user.role }
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -61,7 +62,14 @@ const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const token = generateToken(user._id);
+    if (user.isActive === false) {
+      return res.status(403).json({ error: 'Account deactivated. Please contact support.' });
+    }
+
+    user.lastLogin = new Date();
+    await user.save();
+
+    const token = generateToken(user._id, user.role);
 
     res.json({
       message: 'Login successful',
@@ -70,6 +78,7 @@ const login = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
         skills: user.skills,
         experience: user.experience,
         projects: user.projects,
@@ -92,6 +101,9 @@ const getProfile = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+        lastLogin: user.lastLogin,
         skills: user.skills,
         experience: user.experience,
         projects: user.projects,

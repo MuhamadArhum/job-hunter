@@ -236,7 +236,13 @@ router.get('/settings', authMiddleware, async (req, res) => {
  */
 router.put('/settings', authMiddleware, async (req, res) => {
   try {
-    const allowed = ['maxJobs','defaultRole','defaultCity','jobType','emailSignature','ccMyself','emailLanguage','minAtsScore','autoApproveCvs','autoApproveAts'];
+    const allowed = [
+      'maxJobs','defaultRole','defaultCity','jobType',
+      'preferredRoles','preferredLocations','salaryMin','salaryMax','salaryCurrency',
+      'emailSignature','ccMyself','emailLanguage','emailTone','customEmailTemplate',
+      'linkedinUrl','portfolioUrl','phone','defaultCVTemplate',
+      'minAtsScore','autoApproveCvs','autoApproveAts',
+    ];
     const updates = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) updates[key] = req.body[key];

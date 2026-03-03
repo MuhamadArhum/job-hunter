@@ -55,7 +55,7 @@ const Register = () => {
       const result = await registerUser({ name: data.name, email: data.email, password: data.password });
       if (result.success) {
         toast.success('Account created! Welcome aboard!');
-        navigate('/chat');
+        navigate(result.user?.role === 'admin' ? '/admin' : '/chat');
       } else {
         toast.error(result.error);
       }
@@ -145,6 +145,7 @@ const Register = () => {
           border: none; border-radius: 10px; padding: 11px;
           cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
           box-shadow: 0 2px 14px rgba(34,197,94,0.38); transition: all 0.2s; margin-top: 4px;
+          position: relative; overflow: hidden;
         }
         .rg-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 24px rgba(34,197,94,0.55); }
         .rg-btn:active:not(:disabled) { transform: translateY(0); }

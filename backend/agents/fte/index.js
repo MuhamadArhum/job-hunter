@@ -63,14 +63,26 @@ const DEFAULT_STATE = {
 
 const DEFAULT_SETTINGS = {
   // Job Preferences
-  maxJobs:        5,          // 1–10
-  defaultRole:    '',
-  defaultCity:    '',
-  jobType:        'any',      // 'any' | 'remote' | 'onsite' | 'hybrid'
+  maxJobs:            5,          // 1–10
+  defaultRole:        '',
+  defaultCity:        '',
+  jobType:            'any',      // 'any' | 'remote' | 'onsite' | 'hybrid'
+  preferredRoles:     [],         // array of preferred role strings
+  preferredLocations: [],         // array of preferred location strings
+  salaryMin:          0,
+  salaryMax:          0,
+  salaryCurrency:     'USD',      // 'PKR' | 'USD' | 'GBP'
   // Email Settings
-  emailSignature: '',
-  ccMyself:       false,
-  emailLanguage:  'english',  // 'english' | 'urdu'
+  emailSignature:       '',
+  ccMyself:             false,
+  emailLanguage:        'english', // 'english' | 'urdu'
+  emailTone:            'professional', // 'professional' | 'formal' | 'casual'
+  customEmailTemplate:  '',
+  // Profile
+  linkedinUrl:          '',
+  portfolioUrl:         '',
+  phone:                '',
+  defaultCVTemplate:    'modern',  // 'modern' | 'classic' | 'minimal'
   // Pipeline Settings
   minAtsScore:    0,          // filter CVs below this ATS%
   autoApproveCvs: false,
